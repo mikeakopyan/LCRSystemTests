@@ -1,0 +1,11 @@
+OPCDll/x64/Debug/*
+OPCDll/x64/Release/*
+OPCDll/Debug/*
+OPCDll/Release/*
+x64/Debug/*
+x64/Release/*
+Debug/*
+Release/*
+.vs/*
+ext/*
+

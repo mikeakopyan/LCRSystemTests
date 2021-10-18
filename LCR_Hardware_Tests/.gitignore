@@ -1,0 +1,6 @@
+cvibuild.LCR_Hardware_Tests/Debug/*
+cvibuild.LCR_Hardware_Tests/Debug64/*
+*.exe
+
+
+
