@@ -3,8 +3,8 @@
 #include "..\..\OPCDll\OPCDll\OPCDll.h"
 #include "toolbox.h"
 
-#define FTP_CONFIG_FILE         "C:/Projects/LCRTests/LCR_Hardware_Tests/push_config.xml";
-#define LCR_HARDWARE_TEST_FILES "C:\\Projects\\LCRTests\\LCRTestsFiles\\"
+#define FTP_CONFIG_FILE         "C:/Projects/LCRSystemTests/LCR_Hardware_Tests/push_config.xml";
+#define LCR_HARDWARE_TEST_FILES "C:\\Projects\\LCRsystemTests\\LCRTestsFiles\\"
 
 int sendToLCR(char *name)
 {

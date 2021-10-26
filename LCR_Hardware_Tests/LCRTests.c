@@ -683,8 +683,8 @@ void displayAnalogData(const double *data, int nSamples, int start, int end)
 
 void displayDigitalData(const uint32_t *data, int start, int end)
 {
-	const int digitalBits[] = {30,29,0};
-	const char *legend[] = {"Encoder A","Encoder B","PWM"};
+	const int digitalBits[] = {30,29,0,1};
+	const char *legend[] = {"Encoder A","Encoder B","Laser 1","Laser 2"};
 	static uint32_t bit[sizeof(digitalBits)/sizeof(int)];
 	int nPlots = sizeof(digitalBits)/sizeof(int);
 	long	colors[] = {VAL_RED, VAL_GREEN, VAL_CYAN,
@@ -769,6 +769,35 @@ int LoadAnalogData(const char *filePath)
 	return 0;
 }
 
+void setPartNumberEtc(const char *filePath)
+{
+	char str[100];
+	char *token;
+	char *fname;
+	char *delim = "\\";
+	int buildLayout;
+	int printNumber;
+	int layer;
+	strcpy(str,filePath);
+	fname = token = strtok(str, delim);
+	if (fname == NULL)
+		fname = str;
+	else {
+		while ((token=strtok(NULL,delim))!=NULL)
+				fname = token;
+	}
+	fname[8] = 0;
+	fname[13] = 0;
+	fname[20] = 0;
+	buildLayout = atoi(&fname[3]);
+	printNumber = atoi(&fname[9]);
+	layer = atoi(&fname[15]);
+	
+    OPC_SetSelectedBuildLayout(buildLayout);
+    OPC_SetSelectedPrintNumber(printNumber);
+    OPC_SetSelectedLayer(layer);
+}
+
 int loadAndRunVFLR(char *filePath, int nTrajectories)
 {
 	int ftpError;
@@ -776,10 +805,11 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 	int displayEnd = 0;
 	int analogThreadID = 0;
 	int digitalThreadID = 0;
-	NumberOfAnalogSamples = 60000;
+	NumberOfAnalogSamples = 2000000;
+	NumberOfDigitalSamples = 5*NumberOfAnalogSamples;
 	AnalogSampleRate = 1E6;
 	displayStart = 0;
-	displayEnd = NumberOfAnalogSamples-1;
+	displayEnd = NumberOfAnalogSamples/100-1;
 	SetCtrlVal (PanelHandle, PANEL_RESULT, "Sending file\n");
 	ftpError = sendFileToLCR(filePath);
 	if (ftpError!=0)
@@ -789,6 +819,8 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 		MessagePopup("FTP Error",text);
 		return 1;
 	}
+	
+	setPartNumberEtc(filePath);
 
 	if (AnalogData!=0)
 		free(AnalogData);
@@ -806,33 +838,41 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 #endif
 	for (int trajectory=0; trajectory<nTrajectories; trajectory++)
 	{
+		BOOL runAcq = trajectory >= 0 ? TRUE : FALSE;
+		char str[100];
 		char analogFileName[200];
 		char digitalFileName[200];
 		sprintf(analogFileName,"C:/Temp/AnalogData%d.csv",trajectory);
 		sprintf(digitalFileName,"C:/Temp/PortData%d.csv",trajectory);
-		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
-										DataAcqAnalogThreadFunction, NULL, &analogThreadID);
-		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
-							   			DataAcqDigitalThreadFunction, NULL, &digitalThreadID);
-		SetCtrlVal (PanelHandle, PANEL_RESULT, "Starting acq threads\n");
+		if (runAcq) {
+			CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
+											DataAcqAnalogThreadFunction, NULL, &analogThreadID);
+			CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
+								   			DataAcqDigitalThreadFunction, NULL, &digitalThreadID);
+		}
+		//SetCtrlVal (PanelHandle, PANEL_RESULT, "Starting acq threads\n");
 		Delay(1.0);
 #ifdef USE_PLC
 		OPC_SetCounterReset(0);
-		SetCtrlVal (PanelHandle, PANEL_RESULT, "Release counter reset\n");
-		Delay(0.1);
+		sprintf(str,"Trajectory %d\n",trajectory);
+		SetCtrlVal (PanelHandle, PANEL_RESULT, str);
 #endif
-		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, 0);
-		SaveAnalogData(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
+		if (runAcq) {
+			CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, 0);
+			SaveAnalogData(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
 
-		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
-		SaveDigitalPortData(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
+			CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
+			SaveDigitalPortData(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
+		}
 #ifdef USE_PLC
-		OPC_SetCounterReset(1);
-		SetCtrlVal (PanelHandle, PANEL_RESULT, "Reset encoder counter\n");
-#endif
-		displayAnalogData(AnalogData,NumberOfAnalogSamples,displayStart,displayEnd);
-		displayDigitalData(DigitalPortData,0,5*(displayEnd+1)-1);
 		Delay(1.0);
+		OPC_SetCounterReset(1);
+		//SetCtrlVal (PanelHandle, PANEL_RESULT, "Reset encoder counter\n");
+#endif
+		if (runAcq) {
+			displayAnalogData(AnalogData,NumberOfAnalogSamples,displayStart,displayEnd);
+			displayDigitalData(DigitalPortData,0,5*(displayEnd+1)-1);
+		}
 	}
 	Delay(0.2);
 #ifdef USE_PLC	

@@ -177,13 +177,13 @@ namespace TestLCRTiming
             return true;
         }
 
-        private bool loadBlock(int index)
+        private bool loadBlock(int laserIndex)
         {
             FileStream file_stream = new FileStream(fileName, FileMode.Open, FileAccess.Read);
             BinaryReader reader = new BinaryReader(file_stream);
-            UInt32 offset = (UInt32)blockOffset[index];
+            UInt32 offset = (UInt32)blockOffset[laserIndex];
             file_stream.Position = (long)offset;
-            UInt32 size = (UInt32)blockSize[index];
+            UInt32 size = (UInt32)blockSize[laserIndex];
             allBytesInFile = reader.ReadBytes((int)size);
             return true;
         }
@@ -387,7 +387,7 @@ namespace TestLCRTiming
                 EOTCommand = false;
             }
             bool laserOn = currentPowerState;
-            if (currentPowerState != prevPowerState)
+            //if (currentPowerState != prevPowerState)
             {
                 LaserPowerState laserState = new LaserPowerState();
                 laserState.encoder = currentPosition;
@@ -512,68 +512,113 @@ namespace TestLCRTiming
             }
         }
 
+        private void checkLaser(int laserIndex)
+        {
+            List<int> laserOnOff = new List<int>();
+            for (int i = 1; i < pwmData.Count; i++)
+            {
+                if (pwmData[i].pwm(laserIndex) && !pwmData[i - 1].pwm(laserIndex))
+                    laserOnOff.Add(i);
+                if (pwmData[i].pwm(laserIndex) && !pwmData[i - 1].pwm(laserIndex))
+                    laserOnOff.Add(i);
 
-        private void checkPWMTransitions()
+            }
+        }
+
+        private int checkPWMTransitions(int laserIndex)
         {
             List<int> encoderError = new List<int>();
-            StreamWriter w = new StreamWriter(@"c:\Temp\EncoderErrors.csv");
+            StreamWriter w = new StreamWriter(@"c:\Temp\PWMErrors.csv");
+            bool prevOn = false;
+            int prevIndex = 0;
+            int prevEncoder = 0;
+            int prevPWM = 0;
+            int pwmErrors = 0;
+            checkLaser(laserIndex);
             for (int i=0; i< laserPowerState.Count; i++)
             {
                 int encoder = (int)laserPowerState[i].encoder;
-                if (laserPowerState[i].on == false)
+                if (encoder >= encoderTransitionsIndex.Count)
                     continue;
                 int index = encoderTransitionsIndex[encoder];
-                bool prevState = false;
-                int trIndex = -1;
-                for (int j=index-5; j<index+5; j++)
+                if (index!=0 && prevOn)
                 {
-                    bool pwm = pwmData[j].pwm(0);
-                    if (pwm && !prevState)
+                    int pwmCount = 0;
+                    for (int j=prevIndex; j<=index; j++)
                     {
-                        trIndex = j;
-                        break;
+                        if (pwmData[j].pwm(laserIndex))
+                            pwmCount++;
                     }
-                    prevState = pwm;
+                    double l = index - prevIndex;
+                    double pwmPercent = 0.0;
+                    if (l != 0.0)
+                        pwmPercent = 100.0 * pwmCount / l;
+                    double expectedPWMPercent = 100.0 * prevPWM / 256.0;
+                    double d = pwmPercent - expectedPWMPercent;
+                    if (d < 0.0)
+                        d = -d;
+                    if (d > 0.0)
+                    {
+                        pwmErrors++;
+                        w.WriteLine(d.ToString("F2") + " at " + prevEncoder + " - " + encoder);
+                    }
                 }
-                w.WriteLine((trIndex - index).ToString());
-                //encoderError.Add(trIndex+1 - index);
-                //MessageBox.Show(index.ToString() + "  " + trIndex.ToString());
+                prevOn = laserPowerState[i].on;
+                prevEncoder = encoder;
+                prevIndex = index;
+                prevPWM = laserPowerState[i].pwmDuty;
             }
             w.Close();
+            return pwmErrors;
         }
 
-        private void checkLaserPower()
+        private int checkLaserPower(int laserIndex)
         {
             List<float> laserPowerError = new List<float>();
             StreamWriter w = new StreamWriter(@"c:\Temp\LaserPowerErrors.csv");
             int encoderPowerOnIndex = -1;
             byte expectedLaserPower = 0;
+            int powerErrors = 0;
             for (int i = 0; i < laserPowerState.Count; i++)
             {
                 int encoder = (int)laserPowerState[i].encoder;
+                if (encoderPowerOnIndex >= 0)
+                {
+                    int encoderCenter = (encoder + encoderPowerOnIndex) / 2;
+                    if (encoderCenter >= encoderTransitionsIndex.Count)
+                        continue;
+                    int index = encoderTransitionsIndex[encoderCenter];
+                    index = index / 5;  // adc data @ 1 MHz, digital data @ 5 MHz
+                    float avg = 0.0f;
+                    int n = 0;
+                    int indexStart = index - 10 >= 0 ? index - 10 : 0;
+                    int indexEnd = index + 10 < laserPower.Count ? index + 10 : laserPower.Count - 1;
+                    for (int j = indexStart; j <= indexEnd; j++)
+                    {
+                        avg += laserPower[j].adcLaserPower[laserIndex];
+                        n++;
+                    }
+                    avg /= n;
+                    float expectedADC = 10.0f / 255.5f * ((float)expectedLaserPower + 0.5f);
+                    float dv = avg - expectedADC;
+                    if (Math.Abs(dv) >= 0.05)
+                    {
+                        powerErrors++;
+                        w.WriteLine(dv);
+                    }
+                }
                 if (laserPowerState[i].on)
                 {
                     encoderPowerOnIndex = encoder;
                     expectedLaserPower = laserPowerState[i].power;
-                    continue;
                 }
-                // laser power off
-                int encoderCenter = (encoder + encoderPowerOnIndex) / 2;
-                int index = encoderTransitionsIndex[encoderCenter];
-                index = index / 5;  // adc data @ 1 MHz, digital data @ 1 MHz
-                float avg = 0.0f;
-                int n = 0;
-                for (int j=index-10; j<=index+10; j++)
+                else
                 {
-                    avg += laserPower[j].adcLaserPower[1];
-                    n++;
+                    encoderPowerOnIndex = -1;
                 }
-                avg /= n;
-                float expectedADC = 10.0f / 255.5f * ((float)expectedLaserPower+0.5f);
-                float dv = avg - expectedADC;
-                w.WriteLine(dv);
             }
             w.Close();
+            return powerErrors;
         }
 
         private void btnRun_Click(object sender, EventArgs e)
@@ -581,15 +626,15 @@ namespace TestLCRTiming
             loadPWMData(@"C:\Temp\PortData0.csv");
             loadAnalodData(@"C:\Temp\AnalogData0.csv");
             fillTransitions();
-
-            if (setupVFLRFile(@"C:\Projects\LCRTests\LCRTestsFiles\Rampup\VF-00000-0000_L00001_R01.vflr"))
+            int laserIndex = 0;
+            if (setupVFLRFile(@"C:\Temp\Parts\FromKaushik\VF-00180-0021_L00100_R07.vflr"))
             {
-                if (loadBlock(0))
+                if (loadBlock(laserIndex))
                 {
                     processAllPackets();
-                    checkPWMTransitions();
+                    checkPWMTransitions(laserIndex);
+                    checkLaserPower(laserIndex);
                 }
-                checkLaserPower();
             }
         }
     }
