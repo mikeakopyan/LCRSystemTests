@@ -35,7 +35,7 @@ int32 CreateDAQTaskInProject1(TaskHandle *taskOut1)
 
 	DAQmxErrChk(DAQmxCfgSampClkTiming(taskOut, "", 
 		5000000, DAQmx_Val_Rising, 
-		DAQmx_Val_FiniteSamps, 300000));
+		DAQmx_Val_FiniteSamps, 2500000));
 
 	DAQmxErrChk(DAQmxCfgDigEdgeStartTrig(taskOut, "PFI0", DAQmx_Val_Falling));
 

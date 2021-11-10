@@ -97,7 +97,7 @@ int32 CreateDAQTaskInProject(TaskHandle *taskOut1)
 		1000000, DAQmx_Val_Rising, 
 		DAQmx_Val_FiniteSamps, 1000));
 
-	DAQmxErrChk(DAQmxCfgDigEdgeStartTrig(taskOut, "PFI0", DAQmx_Val_Falling));
+	DAQmxErrChk(DAQmxCfgDigEdgeStartTrig(taskOut, "/PXI1Slot2/PFI0", DAQmx_Val_Falling));
 
     *taskOut1 = taskOut;
 

@@ -25,26 +25,26 @@ int sendToLCR(char *name)
 int sendFileToLCR(char *filePath)
 {
 	int ret = 0;
-	char path[1000];
-	size_t n=strlen(filePath);
-	size_t slashPos = -1;
-	for (size_t i=n-1; i>=0; i--)
-	{
-		if (filePath[i]=='\\')
-		{
-			slashPos = i;
-			break;
-		}
-	}
-	if (slashPos<0)
-		return -1;
-	for (int i=0; i<slashPos; i++)
-		path[i] = filePath[i];
-	path[slashPos] = 0;
-	strcat(path,"\\*.vflr");
+	//char path[1000];
+	//size_t n=strlen(filePath);
+	//size_t slashPos = -1;
+	//for (size_t i=n-1; i>=0; i--)
+	//{
+	//	if (filePath[i]=='\\')
+	//	{
+	//		slashPos = i;
+	//		break;
+	//	}
+	//}
+	//if (slashPos<0)
+	//	return -1;
+	//for (int i=0; i<slashPos; i++)
+	//	path[i] = filePath[i];
+	//path[slashPos] = 0;
+	//strcat(path,"\\*.vflr");
 	//MessagePopup("Debug",path);
 	char *configFile = FTP_CONFIG_FILE;
-	ret = FTP_push(configFile,path);
+	ret = FTP_push(configFile,filePath);
 	Delay(2.0);	// Wait for ftp to complete
 	return ret;
 }

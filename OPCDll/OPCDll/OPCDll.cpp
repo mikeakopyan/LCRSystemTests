@@ -21,7 +21,7 @@ bool opcConnected = false;
 extern "C" {
 #endif
 
-    bool reconnectOPCUA(UA_ClientConfig& UAConfig, UA_Client& UAClient, std::string& ip);
+  bool reconnectOPCUA(UA_ClientConfig& UAConfig, UA_Client& UAClient, std::string& ip);
 
 	int OPC_Init(const char* address)
 	{
@@ -63,6 +63,14 @@ extern "C" {
             bool bConnected = reconnectOPCUA(*puaconfig, *client, ip);
             if (bConnected) {
                 std::this_thread::sleep_for(std::chrono::microseconds(550));
+                retval = UA_Client_readValueAttribute(client,
+                  UA_NODEID_STRING(6, &name[0]),
+                  pVal);
+                if (retval == UA_STATUSCODE_GOOD && UA_Variant_isScalar(pVal)
+                  && pVal->type == &UA_TYPES[UA_TYPES_BOOLEAN])
+                {
+                  memcpy(&bValue, pVal->data, sizeof(boolean));
+                }
             }
             else {
                 UA_Client_disconnect(client);
@@ -85,6 +93,23 @@ extern "C" {
         retval = UA_Client_writeValueAttribute(client,
             UA_NODEID_STRING(6, &name[0]),
             pNewVal);
+        if (retval == UA_STATUSCODE_GOOD)
+        {
+        }
+        else if (UA_STATUSCODE_BADINTERNALERROR == retval) {
+          bool bConnected = reconnectOPCUA(*puaconfig, *client, ip);
+          if (bConnected) {
+            std::this_thread::sleep_for(std::chrono::microseconds(550));
+            retval = UA_Client_writeValueAttribute(client,
+              UA_NODEID_STRING(6, &name[0]),
+              pNewVal);
+          }
+          else {
+            UA_Client_disconnect(client);
+            UA_Client_delete(client);
+          }
+        }
+
         return retval;
     }
 
@@ -100,6 +125,22 @@ extern "C" {
         retval = UA_Client_writeValueAttribute(client,
             UA_NODEID_STRING(6, &name[0]),
             pNewVal);
+        if (retval == UA_STATUSCODE_GOOD)
+        {
+        }
+        else if (UA_STATUSCODE_BADINTERNALERROR == retval) {
+          bool bConnected = reconnectOPCUA(*puaconfig, *client, ip);
+          if (bConnected) {
+            std::this_thread::sleep_for(std::chrono::microseconds(550));
+            retval = UA_Client_writeValueAttribute(client,
+              UA_NODEID_STRING(6, &name[0]),
+              pNewVal);
+          }
+          else {
+            UA_Client_disconnect(client);
+            UA_Client_delete(client);
+          }
+        }
         return retval;
     }
 
@@ -115,6 +156,22 @@ extern "C" {
         retval = UA_Client_writeValueAttribute(client,
             UA_NODEID_STRING(6, &name[0]),
             pNewVal);
+        if (retval == UA_STATUSCODE_GOOD)
+        {
+        }
+        else if (UA_STATUSCODE_BADINTERNALERROR == retval) {
+          bool bConnected = reconnectOPCUA(*puaconfig, *client, ip);
+          if (bConnected) {
+            std::this_thread::sleep_for(std::chrono::microseconds(550));
+            retval = UA_Client_writeValueAttribute(client,
+              UA_NODEID_STRING(6, &name[0]),
+              pNewVal);
+          }
+          else {
+            UA_Client_disconnect(client);
+            UA_Client_delete(client);
+          }
+        }
         return retval;
     }
 
@@ -130,6 +187,22 @@ extern "C" {
         retval = UA_Client_writeValueAttribute(client,
             UA_NODEID_STRING(6, &name[0]),
             pNewVal);
+        if (retval == UA_STATUSCODE_GOOD)
+        {
+        }
+        else if (UA_STATUSCODE_BADINTERNALERROR == retval) {
+          bool bConnected = reconnectOPCUA(*puaconfig, *client, ip);
+          if (bConnected) {
+            std::this_thread::sleep_for(std::chrono::microseconds(550));
+            retval = UA_Client_writeValueAttribute(client,
+              UA_NODEID_STRING(6, &name[0]),
+              pNewVal);
+          }
+          else {
+            UA_Client_disconnect(client);
+            UA_Client_delete(client);
+          }
+        }
         return retval;
     }
 
@@ -218,6 +291,11 @@ extern "C" {
         return OPC_SetBooleanValue("::AsGlobalPV:LCR_OpcData_ToLCR.OpenLayer",
             selection!=0);
 	}
+  
+  const char* OPC_Status_Name(int status)
+  {
+    return UA_StatusCode_name(status);
+  }
 
     bool reconnectOPCUA(UA_ClientConfig& UAConfig, UA_Client& UAClient, std::string& ip)
     {

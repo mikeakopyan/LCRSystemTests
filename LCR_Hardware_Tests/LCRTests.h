@@ -27,6 +27,8 @@
 #define  PANEL_LOAD_VFLR                  12      /* control type: command, callback function: LoadVFLR */
 #define  PANEL_ZOOM_POSITION              13      /* control type: scale, callback function: ZoomPosition */
 #define  PANEL_RUNALLTESTS                14      /* control type: command, callback function: RunAllTests */
+#define  PANEL_ZOOM_START                 15      /* control type: string, callback function: (none) */
+#define  PANEL_ZOOM_LENGTH                16      /* control type: string, callback function: (none) */
 
 
      /* Control Arrays: */

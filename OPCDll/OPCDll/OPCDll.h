@@ -59,6 +59,9 @@ extern "C" {
 	// Close layer if selection = 0
 	DllImport int OPC_SetOpenLayer(int selection);
 
+	// Returns the human-readable name of the StatusCode
+	DllImport  const char* OPC_Status_Name(int status);
+
 	// Function to push files into LCR system
 	// configFile - path to config file
 	// filesPath - path to input folder with file type, i.e.
