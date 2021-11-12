@@ -67,9 +67,13 @@ int LoadAnalogData(const char *filePath);
 //==============================================================================
 // Global variables
 
+volatile BOOL running = FALSE;
+
 static int analogPlotHandles[MAX_NUM_DISPLAY_CHANNELS];
 static int digitalPlotHandles[MAX_NUM_DISPLAY_CHANNELS];
 
+char LoadAndRunFilePath[1000];
+int  LoadAndRunNT = 0;
 
 void WriteLog(const char *msg)
 {
@@ -150,6 +154,15 @@ Error:
 	return 0;
 }
 
+void enableButtons(int panel, int enable)
+{
+	int buttonsIDs[] = {PANEL_QUITBUTTON,PANEL_ACQUIRE,PANEL_RUNALLTESTS, PANEL_ZOOM_POSITION,
+					   PANEL_RAMPUP,PANEL_OVERSHOOT,PANEL_PWM,PANEL_CROSSTALK,PANEL_ACCURACY};
+	for (int i=0; i<sizeof(buttonsIDs)/sizeof(int); i++) {
+			SetCtrlAttribute(panel,buttonsIDs[i],ATTR_DIMMED, 1-enable);
+	}
+}
+
 //==============================================================================
 // UI callback function prototypes
 
@@ -158,6 +171,12 @@ int CVICALLBACK panelCB (int panel, int event, void *callbackData,
 		int eventData1, int eventData2)
 {
 	if (event == EVENT_CLOSE) {
+			if (running) {
+				running = FALSE;
+				SetCtrlAttribute(panel, PANEL_LOAD_VFLR,ATTR_LABEL_TEXT, "Load & Run vfr File");
+				enableButtons(panel,1);
+				return 1;
+			}
      	//DAQmxClearTask(analogTask);
 		//DAQmxClearTask(digitalTask);
 		QuitUserInterface (0);
@@ -468,6 +487,8 @@ void SaveAnalogData(const char *name, float64 *data, int size, int numChannels, 
 	float dt = 1.0/(float)samplingRate;
 	if (f!=0) {
 		fwrite(&dt,sizeof(float),1,f);
+		fwrite(&numChannels,sizeof(int),1,f);
+		fwrite(&size,sizeof(int),1,f);
 		fwrite(data,sizeof(float64),size*numChannels,f);
 		fclose(f);
 	}
@@ -495,6 +516,7 @@ void SaveDigitalPortData(const char *name, uint32_t *data, int size, int samplin
 	float dt = 1.0/(float)samplingRate;
 	if (f!=0) {
 		fwrite(&dt,sizeof(float),1,f);
+		fwrite(&size,sizeof(int),1,f);
 		fwrite(data,sizeof(uint32_t),size,f);		
 		fclose(f);
 	}
@@ -526,6 +548,18 @@ void SaveDigitalData(uInt32 *digitalData, int size, int digitalSampleRate)
 		fwrite(digitalData,sizeof(uInt32),size,f);
 		fclose(f);
 	}
+}
+
+int loadAndRunVFLR(char *path, int nt);
+
+int CVICALLBACK LoadAndRunThreadFunction (void *functionData)
+{
+	running = TRUE;
+	loadAndRunVFLR(LoadAndRunFilePath,LoadAndRunNT);
+	SetCtrlAttribute(PanelHandle, PANEL_LOAD_VFLR,ATTR_LABEL_TEXT, "Load & Run vfr File");
+	enableButtons(PanelHandle,1);
+	running = FALSE;
+	return 0;
 }
 
 int CVICALLBACK DataAcqAnalogThreadFunction (void *functionData);
@@ -617,6 +651,11 @@ int CVICALLBACK QuitCallback (int panel, int control, int event,
 	switch (event)
 	{
 		case EVENT_COMMIT:
+			if (running) {
+				running = FALSE;
+				SetCtrlAttribute(panel, PANEL_LOAD_VFLR,ATTR_LABEL_TEXT, "Load & Run vfr File");
+				enableButtons(panel,1);
+			}
 			QuitUserInterface(0);
 			break;
 	}
@@ -899,6 +938,8 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 #endif
 	for (int trajectory=0; trajectory<nTrajectories; trajectory++)
 	{
+		if (running == FALSE)
+			break;
 		char str[100];
 		char analogFileName[200];
 		char digitalFileName[200];
@@ -909,7 +950,7 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
 							   			DataAcqDigitalThreadFunction, NULL, &digitalThreadID);
 
-		Delay(0.2);
+		Delay(1.0);
 #ifdef USE_PLC
 		for (int k = 0; k < 5; k++)
 		{
@@ -937,14 +978,15 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 			WriteLog("Counter reset retry to set to 1\n");
 		}
 #endif
-		{
-			displayAnalogData(AnalogData,NumberOfAnalogSamples,displayStart,displayEnd);
-			displayDigitalData(DigitalPortData,
-							   digitalToAnalogRateRatio*displayStart,
-							   digitalToAnalogRateRatio*(displayEnd+1)-1);
-		}
+		displayAnalogData(AnalogData,NumberOfAnalogSamples,displayStart,displayEnd);
+		displayDigitalData(DigitalPortData,
+						   digitalToAnalogRateRatio*displayStart,
+						   digitalToAnalogRateRatio*(displayEnd+1)-1);
 	}
-	WriteLog("Test completed\n");
+	if (running)
+		WriteLog("Test completed\n");
+	else
+		WriteLog("Test cancelled\n");
 #ifdef USE_PLC	
 	OPC_SetOpenLayer(0);
 #endif
@@ -1001,23 +1043,34 @@ int readNumberOfTrajectories(char *filePath)
 	return nT;
 }
 
+int loadAndRunThreadID;
+
 int CVICALLBACK LoadVFLR (int panel, int control, int event,
 						  void *callbackData, int eventData1, int eventData2)
 {
-	char filePath[1000];
 	switch (event)
 	{
 		case EVENT_COMMIT:
+			if (running) {
+				running = FALSE;
+				SetCtrlAttribute(panel, PANEL_LOAD_VFLR,ATTR_LABEL_TEXT, "Load & Run vfr File");
+				enableButtons(panel,1);
+				break;
+			}
 			if (FileSelectPopup("c:/Temp","*.vflr","VFLR Files (*.vflr)","Select VFLR file",
-								VAL_LOAD_BUTTON,0,0,1,0,filePath)==1)
+								VAL_LOAD_BUTTON,0,0,1,0,LoadAndRunFilePath)==1)
 			{
-				int nT = readNumberOfTrajectories(filePath);
-				if (nT<0)
+				SetCtrlAttribute(panel, PANEL_LOAD_VFLR, ATTR_LABEL_TEXT, "Cancel");
+				enableButtons(panel,0);
+				LoadAndRunNT = readNumberOfTrajectories(LoadAndRunFilePath);
+				if (LoadAndRunNT<0)
 				{
 					MessagePopup("VFLR file","File format error");
 					return 1;
 				}
-				loadAndRunVFLR(filePath,nT);
+				//loadAndRunVFLR(LoadAndRunFilePath,LoadAndRunNT);
+				CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
+										LoadAndRunThreadFunction, NULL, &loadAndRunThreadID);
 			}
 			break;
 	}
@@ -1034,6 +1087,8 @@ int CVICALLBACK ZoomPosition (int panel, int control, int event,
 	switch (event)
 	{
 		case EVENT_COMMIT:
+			if (running)
+				break;
 			GetCtrlVal(panel, PANEL_ZOOM_START, zoomStartTxt);
 			GetCtrlVal(panel, PANEL_ZOOM_LENGTH, zoomLengthTxt);
 			int zoomStart = atoi(zoomStartTxt);
