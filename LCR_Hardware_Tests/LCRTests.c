@@ -17,6 +17,7 @@
 #include <userint.h>
 #include "LCRTests.h"
 #include "toolbox.h"
+#include "rs232.h"
 
 #include "DAQTaskInProject.h"
 #include "DAQTaskInProject1.h"
@@ -75,19 +76,55 @@ static int digitalPlotHandles[MAX_NUM_DISPLAY_CHANNELS];
 char LoadAndRunFilePath[1000];
 int  LoadAndRunNT = 0;
 
-void WriteLog(const char *msg)
+void WriteLog(const char *msg, BOOL writeToScreen)
 {
+	char temp[10000];
+	char delim[] = {10,0};
+	int n;
 	time_t time_stamp = time(NULL);
 	FILE *f = fopen("c:/Temp/LCRSystemTest.txt","a");
 	if (f!=NULL) {
 		fprintf(f,"%s %s",strtok(ctime(&time_stamp),"\n"),msg);
 		fclose(f);
 	}
-	SetCtrlVal (PanelHandle, PANEL_RESULT, msg);	
+	if (writeToScreen)
+	{
+		// Check to see if there are multiple lines
+		strcpy(temp,msg);
+		n = 0;
+		for (int i=0; i<strlen(temp); i++) {
+			if (temp[i]==10)	// How many lf ?
+			n++;
+		}
+		if (n<2)
+			SetCtrlVal (PanelHandle, PANEL_RESULT, msg);
+		else {
+			char *items[1000] = {1000*0};
+			n = 0;
+			char *tok = strtok(temp,delim);
+			while (tok!=NULL) {
+				items[n++] = tok;
+				tok = strtok(NULL,delim);
+			}
+			for (int i=0; i<n; i++) {
+				int l = (int)strlen(items[i]);
+				if (l>2) {
+					if (*(items[i]+l-2) == 13)	// CR
+						*(items[i]+l-2) = ' ';
+				}
+				if (*(items[i]+l-1)!=10) {
+					*(items[i]+l-1) = 10;
+					*(items[i]+l) = 0;
+				}
+				SetCtrlVal(PanelHandle, PANEL_RESULT, items[i]);
+			}
+		}
+	}
 }
 
 //==============================================================================
 // Global functions
+int RunPinTest(void);
 
 /// HIFN The main entry-point function.
 int main (int argc, char *argv[])
@@ -474,7 +511,7 @@ void disableControlBoxes(int panel)
 void restCheckBoxes(int panel, int keepOn)
 {
 	int zero = 0;
-	int radioButtonsIDs[] = {PANEL_RAMPUP,PANEL_OVERSHOOT,PANEL_PWM,PANEL_CROSSTALK,PANEL_ACCURACY};
+	int radioButtonsIDs[] = {PANEL_RAMPUP,PANEL_OVERSHOOT,PANEL_PWM,PANEL_CROSSTALK,PANEL_ACCURACY,PANEL_PINTEST};
 	for (int i=0; i<sizeof(radioButtonsIDs)/sizeof(int); i++) {
 		if (radioButtonsIDs[i] != keepOn)
 			SetCtrlVal(panel,radioButtonsIDs[i],zero);
@@ -911,7 +948,7 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 	displayStart = 0;
 	displayEnd = NumberOfAnalogSamples/100-1;
 	enableZoom(TRUE);
-	WriteLog("Sending file\n");
+	WriteLog("Sending file\n",TRUE);
 #ifdef USE_LCR
 	int ftpError = sendFileToLCR(filePath);
 	if (ftpError!=0)
@@ -958,11 +995,11 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 			if (opcStatus==0)
 				break;
 			Delay(0.5);
-			WriteLog("Counter reset retry to set to 0\n");
+			WriteLog("Counter reset retry to set to 0\n",TRUE);
 		}		
 #endif
 		sprintf(str,"Trajectory %d\n",trajectory);
-		WriteLog(str);
+		WriteLog(str,TRUE);
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, 0);
 		SaveAnalogData(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
 
@@ -975,7 +1012,7 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 			if (opcStatus==0)
 				break;
 			Delay(0.5);
-			WriteLog("Counter reset retry to set to 1\n");
+			WriteLog("Counter reset retry to set to 1\n",TRUE);
 		}
 #endif
 		displayAnalogData(AnalogData,NumberOfAnalogSamples,displayStart,displayEnd);
@@ -984,9 +1021,9 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 						   digitalToAnalogRateRatio*(displayEnd+1)-1);
 	}
 	if (running)
-		WriteLog("Test completed\n");
+		WriteLog("Test completed\n",TRUE);
 	else
-		WriteLog("Test cancelled\n");
+		WriteLog("Test cancelled\n",TRUE);
 #ifdef USE_PLC	
 	OPC_SetOpenLayer(0);
 #endif
@@ -1148,7 +1185,7 @@ int ExecuteTest(void)
 			free(AnalogData);
 		AnalogData = malloc(NUM_ANALOG_CHANNELS*NumberOfAnalogSamples*sizeof(float64));
 		memset(AnalogData,0,NUM_ANALOG_CHANNELS*NumberOfAnalogSamples*sizeof(float64));
-		WriteLog("Start Analog acq thread\n");
+		WriteLog("Start Analog acq thread\n",TRUE);
 		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
 									   DataAcqAnalogThreadFunction, NULL, &analogThreadID);
 		if (readDigitalPort) {
@@ -1156,7 +1193,7 @@ int ExecuteTest(void)
 				free(DigitalPortData);
 			DigitalPortData = malloc(NumberOfDigitalSamples*sizeof(uint32_t));
 			memset(DigitalPortData,0xAA,NumberOfDigitalSamples*sizeof(uint32_t));
-			WriteLog("Start Digital acq thread\n");
+			WriteLog("Start Digital acq thread\n",TRUE);
 			CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
 									   DataAcqDigitalThreadFunction, NULL, &digitalThreadID);
 		}
@@ -1167,17 +1204,17 @@ int ExecuteTest(void)
 			free(DigitalPortData);
 		DigitalPortData = malloc(NumberOfDigitalSamples*sizeof(uint32_t));
 		memset(DigitalPortData,0xAA,NumberOfDigitalSamples*sizeof(uint32_t));
-		WriteLog("Start Digital acq thread\n");
+		WriteLog("Start Digital acq thread\n",TRUE);
 		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
 									   DataAcqDigitalThreadFunction, NULL, &digitalThreadID);
 	}
 	
 #ifdef USE_PLC
 	Delay(1.0);
-	WriteLog("Open Layer\n");
+	WriteLog("Open Layer\n",TRUE);
 	OPC_SetOpenLayer(1);
 	Delay(1.0);
-	WriteLog("Release Counter Reset\n");
+	WriteLog("Release Counter Reset\n",TRUE);
 	OPC_SetCounterReset(0);
 	Delay(0.1);
 #endif
@@ -1195,11 +1232,11 @@ int ExecuteTest(void)
 		const char *analogFileName = "C:/Temp/AnalogData.csv";
 		const char *digitalFileName = "C:/Temp/PortData.csv";
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, 0);
-		WriteLog("Saving analog data\n");
+		WriteLog("Saving analog data\n",TRUE);
 		SaveAnalogData(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
 		if (readDigitalPort) {
 			CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
-			WriteLog("Saving digital data\n");
+			WriteLog("Saving digital data\n",TRUE);
 			SaveDigitalPortDataTxt(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
 		}
 		strcpy(txtResults,"");
@@ -1302,11 +1339,11 @@ int ExecuteTest(void)
 				   VAL_SOLID, 1, VAL_RED);
 		}
 		if (strlen(txtResults)>0)
-			WriteLog(txtResults);
+			WriteLog(txtResults,TRUE);
 	}
 	if (useDigitalTask) {
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
-		WriteLog("Saving digital port data\n");
+		WriteLog("Saving digital port data\n",TRUE);
 		SaveDigitalPortDataTxt("C:/Temp/PortData.csv",DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
 		strcpy(txtResults,"");
 		if (testID == PANEL_PWM) {
@@ -1328,7 +1365,7 @@ int ExecuteTest(void)
 			}
 		}
 		if (strlen(txtResults)>0)
-			WriteLog(txtResults);
+			WriteLog(txtResults,TRUE);
 		//for (int i=0; i<1; i++) {
 		//	if (digitalPlotHandles[i]!=0)
 		//		DeleteGraphPlot(PanelHandle,PANEL_GRAPH_DIGITAL, digitalPlotHandles[i], VAL_IMMEDIATE_DRAW);
@@ -1349,9 +1386,9 @@ int ExecuteTest(void)
 	OPC_SetOpenLayer(0);
 #endif
 	if (testResult == 0)
-		WriteLog("Test passed\n");
+		WriteLog("Test passed\n",TRUE);
 	else
-		WriteLog("Test failed\n");
+		WriteLog("Test failed\n",TRUE);
 	return testResult;
 }
 
@@ -1374,8 +1411,8 @@ int RampupTest(void)
 	AnalogSampleRate = 1E6;
 	DisplayStart = 0;
 	DisplayEnd = NumberOfAnalogSamples/2-1;
-	WriteLog("Start Rampup test\n");
-	WriteLog("Sending file\n");
+	WriteLog("Start Rampup test\n",TRUE);
+	WriteLog("Sending file\n",TRUE);
 	useAnalogTask = TRUE;
 	useDigitalTask = FALSE;
 	readDigitalPort = FALSE;
@@ -1393,8 +1430,8 @@ int OvershootTest(void)
 	AnalogSampleRate = 1E6;
 	DisplayStart = 265;
 	DisplayEnd = 615;
-	WriteLog("Start Overshoot test\n");
-	WriteLog("Sending file\n");
+	WriteLog("Start Overshoot test\n",TRUE);
+	WriteLog("Sending file\n",TRUE);
 	useAnalogTask = TRUE;
 	useDigitalTask = FALSE;
 	readDigitalPort = FALSE;
@@ -1410,8 +1447,8 @@ int PwmTest(void)
 	testID = PANEL_PWM;
 	DisplayStart = 0;
 	DisplayEnd = 2000-1;
-	WriteLog("Start PWM test\n");
-	WriteLog("Sending file\n");
+	WriteLog("Start PWM test\n",TRUE);
+	WriteLog("Sending file\n",TRUE);
 	useAnalogTask = FALSE;
 	useDigitalTask = TRUE;
 	readDigitalPort = FALSE;
@@ -1429,8 +1466,8 @@ int AnalogAccuracyTest(void)
 	AnalogSampleRate = 90000;
 	DisplayStart = 0;
 	DisplayEnd = NumberOfAnalogSamples-1;
-	WriteLog("Start Accuracy test\n");
-	WriteLog("Sending file\n");
+	WriteLog("Start Accuracy test\n",TRUE);
+	WriteLog("Sending file\n",TRUE);
 	useAnalogTask = TRUE;
 	useDigitalTask = FALSE;
 	readDigitalPort = FALSE;
@@ -1448,8 +1485,8 @@ int CrosstalkTest(void)
 	AnalogSampleRate = 1E5;
 	DisplayStart = 0;
 	DisplayEnd = NumberOfAnalogSamples-1;
-	WriteLog("Start Crosstalk test\n");
-	WriteLog("Sending file\n");
+	WriteLog("Start Crosstalk test\n",TRUE);
+	WriteLog("Sending file\n",TRUE);
 	useAnalogTask = TRUE;
 	useDigitalTask = FALSE;
 	readDigitalPort = FALSE;
@@ -1487,6 +1524,10 @@ int CVICALLBACK RunTest (int panel, int control, int event,
 		if (radioButtonValue==1) {
 			CrosstalkTest();
 		}
+		GetCtrlVal(panel, PANEL_PINTEST, &radioButtonValue);		
+		if (radioButtonValue==1) {
+			RunPinTest();
+		}
 	}			
 	return 0;
 }
@@ -1510,6 +1551,294 @@ int CVICALLBACK RunAllTests (int panel, int control, int event,
 				if (fun_ptr[test]()!=0)
 					MessagePopup("Test Failed","Sequence will be aborted");;
 			}
+			break;
+	}
+	return 0;
+}
+
+int comPort = 3;
+
+int check_login(int com_port, const char *buffer)
+{
+	int cr = 0x0d;
+	if (strchr(buffer,'#')==NULL) {		// Login needed
+		ComWrt(comPort,"root\r",5);
+		Delay(1.0);
+		int nB2 = ComRd(comPort,buffer,1000);
+		ComWrt(comPort,"root\r",5);
+		Delay(1.0);
+		nB2 = ComRd(comPort,buffer,1000);
+		ComWrtByte(comPort, cr);
+		nB2 = ComRd(comPort,buffer,1000);
+		if (nB2>0) {
+			if (strchr(buffer,'#')==NULL) {
+				MessagePopup("Login","Failed");
+				CloseCom(comPort);
+				return 0;
+			}
+		}
+	}
+	return 1;
+}
+
+int RunPinTest(void)
+{
+	int cr = 0x0d;
+	char buffer[1000];
+	char delim[2] = { 10,0};
+	char *run_tests = "python vflcr_test_script_interpreter.py auto_laser_port_combined_loopback.csv 1 1";
+		WriteLog("Start test script\n",TRUE);
+		if (OpenComConfig(comPort,"COM3",115200,0,8,1,1000,512)<0) {
+			MessagePopup("Com port error","Cannot open com port");
+			return 0;
+		}
+		SetComTime(comPort,1.0);	// Set timeout for 1 sec
+		ComWrtByte(comPort, cr);
+		int nB = ComRd(comPort,buffer,1000);
+		if (nB>0) {
+			buffer[nB] = 0;
+			if (check_login(comPort,buffer)==0) {
+				CloseCom(comPort);
+				return 0;
+			}
+			ComWrt(comPort,"cd /media/ssdpart1/script_tests\r",32);
+			nB = ComRd(comPort,buffer,1000);
+			// Send command to execute tests
+			ComWrt(comPort,run_tests,strlen(run_tests));
+			nB = ComRd(comPort,buffer,1000);
+			if (nB>0) {
+				buffer[nB] = 0;
+			}
+			ComWrtByte(comPort, cr);
+			Delay(3);
+			nB = ComRd(comPort,buffer,1000);
+			if (nB>0) {
+				char *items[1000] = {1000*0};
+				int index = 0;
+				buffer[nB] = 0;
+				char *item;
+				item = strtok(buffer,delim);
+				while (item!=NULL) {
+					items[index++] = item;
+					item = strtok(NULL,delim);
+				}
+				for (int i=2; i<index-1; i++) {
+					if (*(items[i]+strlen(items[i])-1)==13)
+						*(items[i]+strlen(items[i])-1) = 10;								
+					WriteLog(items[i],TRUE);
+				}
+			}
+			//WriteLog("Restarting daemon\n",TRUE);
+			//ComWrt(comPort,"anybus-zynq > /dev/null &\n",26);
+			//Delay(2.0);
+			WriteLog("Set automode\n",TRUE);
+		    // Set Auto mode
+		    OPC_SetEnableModeManual(0);
+		    OPC_SetEnableModeAuto(0);
+			Delay(0.1);
+		    OPC_SetEnableModeAuto(1);
+			
+			//WriteLog("Rebooting VF-LCR\n",TRUE);
+			//ComWrt(comPort,"reboot\r",7);
+			//for (int i=0; i<50; i++) {
+			//	char str[100];
+			//	sprintf(str,"%d\r",i);
+			//	SetCtrlVal (PanelHandle, PANEL_RESULT, str);
+			//	Delay(1.0);
+			//}
+			//while (1) {
+			//	nB = ComRd(comPort,buffer,1000);
+			//	if (nB<=0)
+			//		break;
+			//}
+		}
+		CloseCom(comPort);
+		return 0;
+}
+
+int CVICALLBACK TestCommand (int panel, int control, int event,
+							 void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			RunPinTest();
+			break;
+		default:
+			break;
+	}
+	return 0;
+}
+
+// Get UTC time in linux format
+void getUTCTime(char *unix_time)
+{
+	//              0 8    D E C    2   0  2  1     2  0  :  1  7  :  0  2
+	int cindex[] = {8,9,3, 4,5,6,3, 20,21,22,23,3, 11,12,13,14,15,16,17,18};
+	time_t mytime;
+	struct tm * ptm;
+	char *utc_time;
+	time ( &mytime ); // Get local time in time_t
+	ptm = gmtime ( &mytime ); // Find out UTC time
+	time_t utctime = mktime(ptm); // Get UTC time as time_t			
+	utc_time = ctime(&utctime);
+	for (int i=0; i<sizeof(cindex)/sizeof(int); i++)
+		unix_time[i] = *(utc_time+cindex[i]);
+	unix_time[sizeof(cindex)/sizeof(int)] = 0;
+}
+
+int CVICALLBACK InitHardware (int panel, int control, int event,
+							  void *callbackData, int eventData1, int eventData2)
+{
+	BOOL setTime = FALSE;
+	BOOL initSSD = TRUE;
+	BOOL formatComplete = FALSE;
+	int cr = 0x0d;
+	char buffer[10000];
+	char command[1000];
+	// fdisk -H32 -S32 /dev/sda<CR>
+	// n<CR>
+	// p<CR>
+	// 1<CR>
+	// 2048<CR>
+	// <CR>
+	// w<CR>
+	// Expect "Syncing disks"
+	// mkfs.ext4 -O extent -b 4096 -E stride=128,stripe-width=128 /dev/sda1<CR>
+	// Reboot system
+	// hdparm -i /dev/sda<CR>
+	//
+	// Setting time:
+	// date -u -s “9 FEB 2021 14:46:00”<CR>
+	// hwclock -u -w<CR>
+	// 
+	
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			char utc_time[50];
+			char set_time[50];
+			
+			getUTCTime(utc_time);
+			strcpy(set_time,"date -u -s \"");
+			strcat(set_time,utc_time);
+			strcat(set_time,"\"\r");
+			
+			if (OpenComConfig(comPort,"COM3",115200,0,8,1,1000,512)<0) {
+				MessagePopup("Com port error","Cannot open com port");
+				return 0;
+			}
+			SetComTime(comPort,1.0);	// Set timeout for 1 sec
+			ComWrtByte(comPort, cr);
+			int nB = ComRd(comPort,buffer,10000);
+			if (nB>0) {
+				buffer[nB] = 0;
+				if (check_login(comPort,buffer)==0) {
+					CloseCom(comPort);
+					return 0;
+				}
+			}
+			// Set system time
+			if (setTime) {
+				WriteLog("Setting system time\n",TRUE);
+				FlushInQ(comPort);
+				ComWrt(comPort,set_time,strlen(set_time));
+				Delay(1.0);
+				nB = ComRd(comPort,buffer,10000);
+				ComWrt(comPort,"hwclock -u -w\r",14);
+				Delay(1.0);
+				FlushInQ(comPort);
+				ComWrt(comPort,"hwclock\r",8);
+				nB = ComRd(comPort,buffer,10000);
+				buffer[nB] = '\n';
+				buffer[nB+1] = 0;
+				WriteLog(buffer,TRUE);
+			}
+			// Init SSD
+			if (initSSD) {
+				WriteLog("Formating SSD\n",TRUE);
+				FlushInQ(comPort);
+				ComWrt(comPort,"fdisk -H32 -S32 /dev/sda\r",25);
+				Delay(0.5);
+				FlushInQ(comPort);
+				ComWrt(comPort,"n\r",2);
+				nB = ComRd(comPort,buffer,10000);
+				buffer[nB] = 0;
+				WriteLog(buffer,FALSE);
+				if (strstr(buffer,"All space for primary")!=NULL) {
+					MessagePopup("Error","SSD is already formatted");
+					ComWrtByte(comPort,3); 	// ^c
+					Delay(0.5);
+					ComWrtByte(comPort,13);	// cr
+					return 1;
+				}
+				ComWrt(comPort,"p\r",2);
+				Delay(0.5);
+				ComWrt(comPort,"1\r",2);
+				Delay(0.5);
+				ComWrt(comPort,"2048\r",5);
+				Delay(0.5);
+				ComWrt(comPort,"\r",1);
+				Delay(0.5);
+				ComWrt(comPort,"w\r",2);
+				nB = ComRd(comPort,buffer,10000);
+				buffer[nB] = 0;
+				WriteLog(buffer,FALSE);
+				if (strstr(buffer,"Syncing disks")==NULL) {
+					MessagePopup("Error","Cannot start SSD formating");
+					return 1;
+				}
+				if (strstr(buffer,"root@vulcanform")==NULL) {
+					for (int i=0; i<10; i++) {
+						nB = ComRd(comPort,buffer,10000);
+						if (nB>0) {
+							buffer[nB] = 0;
+							if (strstr(buffer,"root@vulcanform")==NULL) {
+								formatComplete = TRUE;
+								break;
+							}
+						}
+					}
+				}
+				else 
+					formatComplete = TRUE;
+				if (!formatComplete) {
+					MessagePopup("Timeout","Cannot complete SSD formating");
+					return 1;
+				}
+				WriteLog("SSD formatting completed",TRUE);
+				Delay(1.0);
+				// Creating filesystem
+				FlushInQ(comPort);
+				strcpy(command,"mkfs.ext4 -O extent -b 4096 -E stride=128,stripe-width=128 /dev/sda1\r");
+				ComWrt(comPort,command,strlen(command));
+				nB = ComRd(comPort,buffer,10000);
+				buffer[nB] = 0;
+				WriteLog(buffer,FALSE);
+				Delay(3.0);
+				nB = ComRd(comPort,buffer,10000);
+				buffer[nB] = 0;
+				WriteLog(buffer,FALSE);
+				if (strstr(buffer,"Writing superblocks and filesystem accounting information")==NULL) {
+					MessagePopup("Error","Cannot create filesystem");
+					return 1;
+				}
+				WriteLog("Creating filesystem completed",FALSE);
+			}
+			CloseCom(comPort);
+			MessagePopup("Info","VFLCR system init completed");
+			break;
+	}
+	return 0;
+}
+
+int CVICALLBACK PinTest (int panel, int control, int event,
+						 void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+			restCheckBoxes(panel,PANEL_PINTEST);
 			break;
 	}
 	return 0;

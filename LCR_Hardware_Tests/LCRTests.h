@@ -29,6 +29,8 @@
 #define  PANEL_RUNALLTESTS                14      /* control type: command, callback function: RunAllTests */
 #define  PANEL_ZOOM_START                 15      /* control type: string, callback function: (none) */
 #define  PANEL_ZOOM_LENGTH                16      /* control type: string, callback function: (none) */
+#define  PANEL_INIT_HARDWARE              17      /* control type: command, callback function: InitHardware */
+#define  PANEL_PINTEST                    18      /* control type: radioButton, callback function: PinTest */
 
 
      /* Control Arrays: */
@@ -44,9 +46,11 @@
 
 int  CVICALLBACK Accuracy(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK Crosstalk(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK InitHardware(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK LoadVFLR(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK Overshoot(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK panelCB(int panel, int event, void *callbackData, int eventData1, int eventData2);
+int  CVICALLBACK PinTest(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK pwm(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK QuitCallback(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 int  CVICALLBACK RunAllTests(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
