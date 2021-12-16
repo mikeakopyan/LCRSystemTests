@@ -32,6 +32,7 @@
 #define  PANEL_INIT_HARDWARE              17      /* control type: command, callback function: InitHardware */
 #define  PANEL_PINTEST                    18      /* control type: radioButton, callback function: PinTest */
 #define  PANEL_SERIAL_NUMBER              19      /* control type: string, callback function: (none) */
+#define  PANEL_TEXT_COUNTER               20      /* control type: textMsg, callback function: (none) */
 
 
      /* Control Arrays: */

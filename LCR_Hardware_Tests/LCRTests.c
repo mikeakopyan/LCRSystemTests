@@ -34,6 +34,8 @@ extern int ftpToSSD(const char *folder, const char *config_file);
 //==============================================================================
 // Constants
 
+#define COM_PORT "COM4"
+
 #define MAX_NUM_DISPLAY_CHANNELS 21
 #define NUM_ANALOG_CHANNELS 21
 #define NUM_ANALOG_CHANNELS_TO_CHECK 21
@@ -130,16 +132,20 @@ void WriteLog(const char *msg, BOOL writeToScreen)
 				tok = strtok(NULL,delim);
 			}
 			for (int i=0; i<n; i++) {
+				char tmp[1000];
 				int l = (int)strlen(items[i]);
 				if (l>2) {
 					if (*(items[i]+l-2) == 13)	// CR
 						*(items[i]+l-2) = ' ';
+					strcpy(tmp,items[i]);
 				}
 				if (*(items[i]+l-1)!=10) {
-					*(items[i]+l-1) = 10;
-					*(items[i]+l) = 0;
+
+					strcpy(tmp,items[i]);
+					*(tmp+l) = 10;
+					*(tmp+l+1) = 0;
 				}
-				SetCtrlVal(PanelHandle, PANEL_RESULT, items[i]);
+				SetCtrlVal(PanelHandle, PANEL_RESULT, tmp);
 			}
 		}
 	}
@@ -161,6 +167,7 @@ int main (int argc, char *argv[])
 	nullChk (InitCVIRTE (0, argv, 0));
 	errChk (PanelHandle = LoadPanel (0, "LCRTests.uir", PANEL));
 
+	SetCtrlVal(PanelHandle,PANEL_TEXT_COUNTER,"");
 
 #ifdef USE_PLC
 	if (!OPC_Init(TEST_PLC_IP_ADDRESS)) {
@@ -1342,9 +1349,9 @@ int ExecuteTest(void)
 											NumberOfAnalogSamples,
 											&deltaPlus,&deltaMinus);
 				if (pass)
-					sprintf(txtOneResult,"%.3f %.3f\n",deltaMinus,deltaPlus);
+					sprintf(txtOneResult,"%.1f %.1f\n",deltaMinus*1000.0,deltaPlus*1000.0);
 				else {
-					sprintf(txtOneResult,"%.3f %.3f FAIL\n",deltaMinus,deltaPlus);
+					sprintf(txtOneResult,"%.1f %.1f FAIL\n",deltaMinus*1000.0,deltaPlus*1000.0);
 					testResult = 1;
 				}
 				strcat(txtResults,txtOneResult);
@@ -1612,7 +1619,7 @@ int RunPinTest(void)
 	char delim[2] = { 10,0};
 	char *run_tests = "python vflcr_test_script_interpreter.py auto_laser_port_combined_loopback.csv 1 1";
 		WriteLog("Start test script\n",TRUE);
-		if (OpenComConfig(comPort,"COM3",115200,0,8,1,1000,512)<0) {
+		if (OpenComConfig(comPort,COM_PORT,115200,0,8,1,1000,512)<0) {
 			MessagePopup("Com port error","Cannot open com port");
 			return 0;
 		}
@@ -1790,10 +1797,12 @@ int copyOneFolder(const char *folder, const char *config, BOOL showLog)
 
 int copyAllFiles(void)
 {
+	char buffer[10000];
 	char *unzip1 = "unzip  -o -q /media/ssdpart1/MachineParameters/MachineParameters.zip -d /media/ssdpart1/MachineParameters\r";
 	char *unzip2 = "unzip  -o -q /media/ssdpart1/packet_tests/packet_tests.zip -d /media/ssdpart1/packet_tests\r";
 	char *unzip3 = "unzip  -o -q /media/ssdpart1/script_tests/script_tests.zip -d /media/ssdpart1/script_tests\r";
 	WriteLog("Copy laser control files...\n",TRUE);
+	FlushInQ(comPort);
 	if (sendFileToLCR(SSD_LASER_CONTROL_FOLDER)!=0) {
 		MessagePopup("Error","Cannot copy laser control files to VFLCR");
 		return 1;
@@ -1803,7 +1812,10 @@ int copyAllFiles(void)
 		MessagePopup("Error","Cannot copy file to VFLCR");
 		return 1;
 	}
-	ComWrt(comPort,unzip1,strlen(unzip1));
+	ComWrt(comPort,unzip1,strlen(unzip1));	
+	//int nB = ComRd(comPort,buffer,10000);
+	//buffer[nB] = 0;
+	//WriteLog(buffer,TRUE);
 	WriteLog("Copy packet_test files...\n",TRUE);
 	if (copyOneFolder(SSD_PACKET_TESTS_FOLDER,SSD_PACKET_TESTS_CONFIG,FALSE)!=0) {
 		MessagePopup("Error","Cannot copy file to VFLCR");
@@ -1816,8 +1828,9 @@ int copyAllFiles(void)
 		return 1;
 	}
 	ComWrt(comPort,unzip3,strlen(unzip3));
-	Delay(2.0);
-	//WriteLog("Done\n",TRUE);
+	int nB = ComRd(comPort,buffer,10000);
+	buffer[nB] = 0;
+	WriteLog(buffer,FALSE);
 	return 0;
 }
 
@@ -1834,6 +1847,7 @@ int changePermissions()
 	Delay(0.1);
 	int nB = ComRd(comPort,buffer,10000);
 	buffer[nB] = 0;
+	WriteLog(buffer,FALSE);
 	//WriteLog(buffer,TRUE);
 	if (strstr(buffer,"cannot")!=NULL)
 		return 1;
@@ -1844,8 +1858,8 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 							  void *callbackData, int eventData1, int eventData2)
 {
 	int retVal = TRUE;
-	BOOL setTime = FALSE;
-	BOOL initSSD = FALSE;
+	BOOL setTime = TRUE;
+	BOOL initSSD = TRUE;
 	BOOL copyFiles = TRUE;
 	
 	BOOL formatComplete = FALSE;
@@ -1864,7 +1878,7 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 			strcat(set_time,utc_time);
 			strcat(set_time,"\"\r");
 			
-			if (OpenComConfig(comPort,"COM3",115200,0,8,1,1000,512)<0) {
+			if (OpenComConfig(comPort,COM_PORT,115200,0,8,1,1000,512)<0) {
 				MessagePopup("Com port error","Cannot open com port");
 				return FALSE;
 			}
@@ -1875,7 +1889,7 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				buffer[nB] = 0;
 				if (check_login(comPort,buffer)==0) {
 					CloseCom(comPort);
-					return FALSE;
+					return 0;
 				}
 			}
 			// Set system time
@@ -1896,6 +1910,18 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 			}
 			// Init SSD
 			if (initSSD) {
+				// Check to see if SSD is connected
+				FlushInQ(comPort);
+				ComWrt(comPort,"hdparm -i /dev/sda\r",19);
+				nB = ComRd(comPort,buffer,10000);
+				buffer[nB] = 0;
+				WriteLog(buffer,FALSE);
+				if (strstr(buffer," No such")!=NULL) {
+					CloseCom(comPort);
+					MessagePopup("Error","SSD is not connected");
+					WriteLog("SSD is not connected",FALSE);
+					return 0;
+				}
 				WriteLog("Formating SSD\n",TRUE);
 				FlushInQ(comPort);
 				ComWrt(comPort,"fdisk -H32 -S32 /dev/sda\r",25);
@@ -1947,7 +1973,13 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 						return 1;
 					}
 					WriteLog("Rebooting LCR. Please Wait 60 secs\n",TRUE);
-					Delay(60.0);
+					for (int sec=60; sec>=0; sec--) {
+						char txt[10];
+						sprintf(txt,"%d",sec);
+						SetCtrlVal(PanelHandle,PANEL_TEXT_COUNTER,txt);
+						Delay(1.0);
+					}
+					SetCtrlVal(PanelHandle,PANEL_TEXT_COUNTER,"");
 					ComWrt(comPort,"root\r",5);
 					ComWrt(comPort,"root\r",5);
 					ComWrt(comPort,"root\r",5);
@@ -1976,18 +2008,21 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				FlushInQ(comPort);
 				strcpy(command,"mkfs.ext4 -O extent -b 4096 -E stride=128,stripe-width=128 /dev/sda1\r");
 				ComWrt(comPort,command,strlen(command));
+				Delay(6.0);
 				nB = ComRd(comPort,buffer,10000);
 				buffer[nB] = 0;
 				WriteLog(buffer,FALSE);
-				Delay(3.0);
-				nB = ComRd(comPort,buffer,10000);
-				buffer[nB] = 0;
-				WriteLog(buffer,FALSE);
-				if (strstr(buffer,"Writing superblocks and filesystem accounting information")==NULL) {
-					MessagePopup("Error","Cannot create filesystem");
-					return FALSE;
+				if (strstr(buffer,"/dev/sda1 contains a ext4 file system")!=NULL) {
+					ComWrt(comPort,"N\r",2);
+					ComWrtByte(comPort,3);
 				}
-				WriteLog("Creating filesystem completed\n",FALSE);
+				else {
+					if (strstr(buffer,"Writing superblocks and filesystem accounting information")==NULL) {
+						MessagePopup("Error","Cannot create filesystem");
+						return FALSE;
+					}
+					WriteLog("Creating filesystem completed\n",FALSE);
+				}
 			}
 			if (copyFiles) {
 				if (createFolders()!=0)
