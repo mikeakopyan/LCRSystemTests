@@ -1,0 +1,10 @@
+<?xml version="1.0"?>
+<vfconfig>
+    <targetset>
+        <target id='1' enabled='y'>
+            <address ip="192.168.210.51" user="vfadmin" pwdftp="VFP@ssw0rd17VF" />
+            <storage path="./packet_tests" size="5859373" />
+        </target>
+    </targetset>
+</vfconfig>
+

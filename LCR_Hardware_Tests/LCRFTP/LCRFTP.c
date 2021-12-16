@@ -22,6 +22,14 @@ int sendToLCR(char *name)
 	return ret;
 }
 
+int ftpToSSD(const char *folder, const char *config_file)
+{
+	int ret = 0;
+	ret = FTP_push(config_file,folder);
+	Delay(2.0);	// Wait for ftp to complete
+	return ret;
+}
+
 int sendFileToLCR(char *filePath)
 {
 	int ret = 0;

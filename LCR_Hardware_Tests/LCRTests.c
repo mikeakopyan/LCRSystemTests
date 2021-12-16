@@ -18,6 +18,7 @@
 #include "LCRTests.h"
 #include "toolbox.h"
 #include "rs232.h"
+#include "utility.h"
 
 #include "DAQTaskInProject.h"
 #include "DAQTaskInProject1.h"
@@ -28,6 +29,7 @@
 
 extern int sendToLCR(char *name);
 extern int sendFileToLCR(char *name);
+extern int ftpToSSD(const char *folder, const char *config_file);
 
 //==============================================================================
 // Constants
@@ -38,6 +40,15 @@ extern int sendFileToLCR(char *name);
 #define NUM_DIGITAL_CHANNELS_TO_CHECK 21
 #define NUM_DIGITAL_CHANNELS 1
 #define TEST_PLC_IP_ADDRESS "192.168.210.50:4840"
+
+#define SSD_LASER_CONTROL_FOLDER       "C:\\Projects\\LCRSystemTests\\VF-LCR Drive Image\\CurrentBuild\\LaserControlFiles\\*.vflr"
+#define SSD_PACKET_TESTS_FOLDER       "C:\\Projects\\LCRSystemTests\\VF-LCR Drive Image\\\\packet_tests\\"
+#define SSD_SCRIPT_TESTS_FOLDER       "C:\\Projects\\LCRSystemTests\\VF-LCR Drive Image\\script_tests\\"
+#define SSD_MACHINE_PARAMETERS_FOLDER "C:\\Projects\\LCRSystemTests\\VF-LCR Drive Image\\MachineParameters\\"
+
+#define SSD_PACKET_TESTS_CONFIG       "C:/Projects/LCRSystemTests/packet_tests_config.xml"
+#define SSD_SCRIPT_TESTS_CONFIG       "C:/Projects/LCRSystemTests/script_tests_config.xml"
+#define SSD_MACHINE_PARAMETERS_CONFIG "C:/Projects/LCRSystemTests/machine_parameters_config.xml"
 
 #define USE_PLC
 #define USE_LCR
@@ -78,11 +89,23 @@ int  LoadAndRunNT = 0;
 
 void WriteLog(const char *msg, BOOL writeToScreen)
 {
+	char buffer[26];
+	char logFileName[1000];
+	char serialNumber[50];
 	char temp[10000];
 	char delim[] = {10,0};
 	int n;
+	GetCtrlVal(PanelHandle, PANEL_SERIAL_NUMBER, serialNumber);
+	if (strlen(serialNumber)==0) {
+		PromptPopup("Serial Number","Please Enter Unit Serial Number",buffer,25);
+		SetCtrlVal(PanelHandle,PANEL_SERIAL_NUMBER,buffer);
+		strcpy(serialNumber,buffer);
+	}
+	strcpy(logFileName,"c:/Temp/LCRSystemTest_");
+	strcat(logFileName,serialNumber);
+	strcat(logFileName,".txt");
 	time_t time_stamp = time(NULL);
-	FILE *f = fopen("c:/Temp/LCRSystemTest.txt","a");
+	FILE *f = fopen(logFileName,"a");
 	if (f!=NULL) {
 		fprintf(f,"%s %s",strtok(ctime(&time_stamp),"\n"),msg);
 		fclose(f);
@@ -1535,8 +1558,8 @@ int CVICALLBACK RunTest (int panel, int control, int event,
 int CVICALLBACK RunAllTests (int panel, int control, int event,
 							 void *callbackData, int eventData1, int eventData2)
 {
-	int radioButtonsIDs[] = {PANEL_RAMPUP, PANEL_OVERSHOOT, PANEL_ACCURACY,      PANEL_PWM, PANEL_CROSSTALK};
-	int (*fun_ptr[]) () =   {&RampupTest,   &OvershootTest,  &AnalogAccuracyTest, &PwmTest,  &CrosstalkTest,};
+	int radioButtonsIDs[] = {PANEL_RAMPUP, PANEL_OVERSHOOT, PANEL_ACCURACY,      PANEL_PWM, PANEL_CROSSTALK, PANEL_PINTEST};
+	int (*fun_ptr[]) () =   {&RampupTest,  &OvershootTest,  &AnalogAccuracyTest, &PwmTest,  &CrosstalkTest,  &RunPinTest};
 	switch (event)
 	{
 		case EVENT_COMMIT:
@@ -1583,6 +1606,7 @@ int check_login(int com_port, const char *buffer)
 
 int RunPinTest(void)
 {
+	int errCode = 0;
 	int cr = 0x0d;
 	char buffer[1000];
 	char delim[2] = { 10,0};
@@ -1622,16 +1646,30 @@ int RunPinTest(void)
 					items[index++] = item;
 					item = strtok(NULL,delim);
 				}
-				for (int i=2; i<index-1; i++) {
-					if (*(items[i]+strlen(items[i])-1)==13)
-						*(items[i]+strlen(items[i])-1) = 10;								
-					WriteLog(items[i],TRUE);
+				if (index<5) {
+					errCode = 1;
+					MessagePopup("Error","Cannot execute discrete I/O test");
+					WriteLog("Cannot execute discrete I/O test\n",TRUE);
+					for (int i=0; i<index; i++) {
+						if (*(items[i]+strlen(items[i])-1)==13)
+							*(items[i]+strlen(items[i])-1) = 10;								
+						WriteLog(items[i],TRUE);
+					}					
+				}
+				else {
+					for (int i=2; i<index-1; i++) {
+						if (*(items[i]+strlen(items[i])-1)==13)
+							*(items[i]+strlen(items[i])-1) = 10;								
+						WriteLog(items[i],TRUE);
+						if (strstr(items[i],"FAIL")!=NULL)
+							errCode = 2;
+					}
 				}
 			}
 			//WriteLog("Restarting daemon\n",TRUE);
 			//ComWrt(comPort,"anybus-zynq > /dev/null &\n",26);
 			//Delay(2.0);
-			WriteLog("Set automode\n",TRUE);
+			//WriteLog("Set automode\n",TRUE);
 		    // Set Auto mode
 		    OPC_SetEnableModeManual(0);
 		    OPC_SetEnableModeAuto(0);
@@ -1651,9 +1689,13 @@ int RunPinTest(void)
 			//	if (nB<=0)
 			//		break;
 			//}
+			if (errCode!=0)
+				WriteLog("Test FAILED\n",TRUE);
+			else
+				WriteLog("Test passed\n",TRUE);
 		}
 		CloseCom(comPort);
-		return 0;
+		return errCode;
 }
 
 int CVICALLBACK TestCommand (int panel, int control, int event,
@@ -1687,31 +1729,129 @@ void getUTCTime(char *unix_time)
 	unix_time[sizeof(cindex)/sizeof(int)] = 0;
 }
 
+void strToPort(const char *txt, float delay)
+{
+	ComWrt(comPort,txt,strlen(txt));
+	Delay(delay);
+}
+
+int createFolders(void)
+{
+	char buffer[10000];
+	FlushInQ(comPort);
+	strToPort("cd /media/ssdpart1\r",0.1);
+	strToPort("mkdir CurrentBuild\r",0.1);
+	strToPort("mkdir CurrentBuild/LaserControlFiles\r",0.1);
+	strToPort("mkdir MachineParameters\r",0.1);
+	strToPort("mkdir packet_tests\r",0.1);
+	strToPort("mkdir script_tests\r",0.1);
+	strToPort("mkdir script_tests/script_outputs\r",0.5);
+	// Check that all folders have been created
+	FlushInQ(comPort);
+	strToPort("ls\r",0.1);
+	strToPort("ls CurrentBuild\r",0.1);
+	strToPort("ls script_tests\r",0.1);
+	int nB = ComRd(comPort,buffer,10000);
+	buffer[nB] = 0;
+	if (strstr(buffer,"CurrentBuild")==NULL ||
+		strstr(buffer,"LaserControlFiles")==NULL ||
+		strstr(buffer,"packet_tests")==NULL ||
+		strstr(buffer,"script_tests")==NULL ||
+		strstr(buffer,"script_outputs")==NULL ||
+		strstr(buffer,"MachineParameters")==NULL)
+		return 1;	
+	return 0;
+}
+
+int copyOneFolder(const char *folder, const char *config, BOOL showLog)
+{
+	char fileName[1000];
+	char src_folder[1000];
+	char file_path[1000];
+	char txt[1000];
+	
+	strcpy(src_folder,folder);
+	strcat(src_folder,"*");
+	int f = GetFirstFile(src_folder,1,0,0,0,0,0,fileName);
+	while (f==0) {
+		strcpy(txt,fileName);
+		strcat(txt,"\n");
+		if (showLog)
+			WriteLog(txt,TRUE);
+		strcpy(file_path,folder);
+		strcat(file_path,fileName);
+		int err = ftpToSSD(file_path,config);
+		if (err!=0)
+			return err;
+		f = GetNextFile(fileName);
+	}
+	return 0;
+}
+
+int copyAllFiles(void)
+{
+	char *unzip1 = "unzip  -o -q /media/ssdpart1/MachineParameters/MachineParameters.zip -d /media/ssdpart1/MachineParameters\r";
+	char *unzip2 = "unzip  -o -q /media/ssdpart1/packet_tests/packet_tests.zip -d /media/ssdpart1/packet_tests\r";
+	char *unzip3 = "unzip  -o -q /media/ssdpart1/script_tests/script_tests.zip -d /media/ssdpart1/script_tests\r";
+	WriteLog("Copy laser control files...\n",TRUE);
+	if (sendFileToLCR(SSD_LASER_CONTROL_FOLDER)!=0) {
+		MessagePopup("Error","Cannot copy laser control files to VFLCR");
+		return 1;
+	}
+	WriteLog("Copy MachineParameters files...\n",TRUE);
+	if (copyOneFolder(SSD_MACHINE_PARAMETERS_FOLDER,SSD_MACHINE_PARAMETERS_CONFIG,FALSE)!=0) {
+		MessagePopup("Error","Cannot copy file to VFLCR");
+		return 1;
+	}
+	ComWrt(comPort,unzip1,strlen(unzip1));
+	WriteLog("Copy packet_test files...\n",TRUE);
+	if (copyOneFolder(SSD_PACKET_TESTS_FOLDER,SSD_PACKET_TESTS_CONFIG,FALSE)!=0) {
+		MessagePopup("Error","Cannot copy file to VFLCR");
+		return 1;
+	}
+	ComWrt(comPort,unzip2,strlen(unzip2));
+	WriteLog("Copy script_test files...\n",TRUE);
+	if (copyOneFolder(SSD_SCRIPT_TESTS_FOLDER,SSD_SCRIPT_TESTS_CONFIG,FALSE)!=0) {
+		MessagePopup("Error","Cannot copy file to VFLCR");
+		return 1;
+	}
+	ComWrt(comPort,unzip3,strlen(unzip3));
+	Delay(2.0);
+	//WriteLog("Done\n",TRUE);
+	return 0;
+}
+
+int changePermissions()
+{
+	char buffer[10000];
+	char *chmod1 = "chmod +x /media/ssdpart1/script_tests/read-write7_NOT_TestReg\r";
+	char *chmod2 = "chmod +x /media/ssdpart1/script_tests/test_script_interpreter_loop_2\r";
+	FlushInQ(comPort);
+	WriteLog("Change file permissions\n",TRUE);
+	ComWrt(comPort,chmod1,strlen(chmod1));
+	Delay(0.1);
+	ComWrt(comPort,chmod2,strlen(chmod2));
+	Delay(0.1);
+	int nB = ComRd(comPort,buffer,10000);
+	buffer[nB] = 0;
+	//WriteLog(buffer,TRUE);
+	if (strstr(buffer,"cannot")!=NULL)
+		return 1;
+	return 0;
+}
+
 int CVICALLBACK InitHardware (int panel, int control, int event,
 							  void *callbackData, int eventData1, int eventData2)
 {
+	int retVal = TRUE;
 	BOOL setTime = FALSE;
-	BOOL initSSD = TRUE;
+	BOOL initSSD = FALSE;
+	BOOL copyFiles = TRUE;
+	
 	BOOL formatComplete = FALSE;
 	int cr = 0x0d;
 	char buffer[10000];
 	char command[1000];
-	// fdisk -H32 -S32 /dev/sda<CR>
-	// n<CR>
-	// p<CR>
-	// 1<CR>
-	// 2048<CR>
-	// <CR>
-	// w<CR>
-	// Expect "Syncing disks"
-	// mkfs.ext4 -O extent -b 4096 -E stride=128,stripe-width=128 /dev/sda1<CR>
-	// Reboot system
-	// hdparm -i /dev/sda<CR>
-	//
-	// Setting time:
-	// date -u -s “9 FEB 2021 14:46:00”<CR>
-	// hwclock -u -w<CR>
-	// 
 	
 	switch (event)
 	{
@@ -1726,7 +1866,7 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 			
 			if (OpenComConfig(comPort,"COM3",115200,0,8,1,1000,512)<0) {
 				MessagePopup("Com port error","Cannot open com port");
-				return 0;
+				return FALSE;
 			}
 			SetComTime(comPort,1.0);	// Set timeout for 1 sec
 			ComWrtByte(comPort, cr);
@@ -1735,7 +1875,7 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				buffer[nB] = 0;
 				if (check_login(comPort,buffer)==0) {
 					CloseCom(comPort);
-					return 0;
+					return FALSE;
 				}
 			}
 			// Set system time
@@ -1766,48 +1906,72 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				buffer[nB] = 0;
 				WriteLog(buffer,FALSE);
 				if (strstr(buffer,"All space for primary")!=NULL) {
-					MessagePopup("Error","SSD is already formatted");
+					MessagePopup("Error","SSD is already formatted. Script will continue");
 					ComWrtByte(comPort,3); 	// ^c
 					Delay(0.5);
 					ComWrtByte(comPort,13);	// cr
-					return 1;
 				}
-				ComWrt(comPort,"p\r",2);
-				Delay(0.5);
-				ComWrt(comPort,"1\r",2);
-				Delay(0.5);
-				ComWrt(comPort,"2048\r",5);
-				Delay(0.5);
-				ComWrt(comPort,"\r",1);
-				Delay(0.5);
-				ComWrt(comPort,"w\r",2);
-				nB = ComRd(comPort,buffer,10000);
-				buffer[nB] = 0;
-				WriteLog(buffer,FALSE);
-				if (strstr(buffer,"Syncing disks")==NULL) {
-					MessagePopup("Error","Cannot start SSD formating");
-					return 1;
-				}
-				if (strstr(buffer,"root@vulcanform")==NULL) {
-					for (int i=0; i<10; i++) {
-						nB = ComRd(comPort,buffer,10000);
-						if (nB>0) {
-							buffer[nB] = 0;
-							if (strstr(buffer,"root@vulcanform")==NULL) {
-								formatComplete = TRUE;
-								break;
+				else {
+					ComWrt(comPort,"p\r",2);
+					Delay(0.5);
+					ComWrt(comPort,"1\r",2);
+					Delay(0.5);
+					ComWrt(comPort,"2048\r",5);
+					Delay(0.5);
+					ComWrt(comPort,"\r",1);
+					Delay(0.5);
+					ComWrt(comPort,"w\r",2);
+					nB = ComRd(comPort,buffer,10000);
+					buffer[nB] = 0;
+					WriteLog(buffer,FALSE);
+					if (strstr(buffer,"Syncing disks")==NULL) {
+						MessagePopup("Error","Cannot start SSD formating");
+						return 1;
+					}
+					if (strstr(buffer,"root@vulcanform")==NULL) {
+						for (int i=0; i<10; i++) {
+							nB = ComRd(comPort,buffer,10000);
+							if (nB>0) {
+								buffer[nB] = 0;
+								if (strstr(buffer,"root@vulcanform")==NULL) {
+									formatComplete = TRUE;
+									break;
+								}
 							}
 						}
 					}
+					else 
+						formatComplete = TRUE;
+					if (!formatComplete) {
+						MessagePopup("Timeout","Cannot complete SSD formating");
+						return 1;
+					}
+					WriteLog("Rebooting LCR. Please Wait 60 secs\n",TRUE);
+					Delay(60.0);
+					ComWrt(comPort,"root\r",5);
+					ComWrt(comPort,"root\r",5);
+					ComWrt(comPort,"root\r",5);
+					Delay(1.0);
+					FlushInQ(comPort);
+					ComWrt(comPort,"\r",1);
+					nB = ComRd(comPort,buffer,10000);
+					buffer[nB] = 0;
+					if (check_login(comPort,buffer)==0) {
+						MessagePopup("ERROR","Cannot login after reboot");
+						CloseCom(comPort);
+						return FALSE;
+					}
+					ComWrt(comPort,"hdparm -i /dev/sda\r",19);
+					nB = ComRd(comPort,buffer,10000);
+					buffer[nB] = 0;
+					if (strstr(buffer,"Samsung")==NULL) {
+						MessagePopup("ERROR","Wrong SSD model");
+						CloseCom(comPort);
+						return FALSE;
+					}
+					WriteLog("SSD formatting completed\n",TRUE);
+					Delay(1.0);
 				}
-				else 
-					formatComplete = TRUE;
-				if (!formatComplete) {
-					MessagePopup("Timeout","Cannot complete SSD formating");
-					return 1;
-				}
-				WriteLog("SSD formatting completed",TRUE);
-				Delay(1.0);
 				// Creating filesystem
 				FlushInQ(comPort);
 				strcpy(command,"mkfs.ext4 -O extent -b 4096 -E stride=128,stripe-width=128 /dev/sda1\r");
@@ -1821,12 +1985,32 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				WriteLog(buffer,FALSE);
 				if (strstr(buffer,"Writing superblocks and filesystem accounting information")==NULL) {
 					MessagePopup("Error","Cannot create filesystem");
-					return 1;
+					return FALSE;
 				}
-				WriteLog("Creating filesystem completed",FALSE);
+				WriteLog("Creating filesystem completed\n",FALSE);
+			}
+			if (copyFiles) {
+				if (createFolders()!=0)
+					WriteLog("ERROR: Cannot create folders\n",TRUE);
+				else {
+					if (copyAllFiles()!=0) {
+						MessagePopup("ERROR","Cannot copy all files");
+						retVal = FALSE;
+					}
+					else
+					{
+						if (changePermissions()!=0) {
+							MessagePopup("ERROR","Cannot change file permissions");
+							retVal = FALSE;
+						}
+					}
+				}
 			}
 			CloseCom(comPort);
-			MessagePopup("Info","VFLCR system init completed");
+			if (retVal==TRUE)
+				MessagePopup("Info","VFLCR system init completed");
+			else
+				MessagePopup("Error","Error during initilalization");
 			break;
 	}
 	return 0;
