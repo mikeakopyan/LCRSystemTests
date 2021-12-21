@@ -34,7 +34,7 @@ extern int ftpToSSD(const char *folder, const char *config_file);
 //==============================================================================
 // Constants
 
-#define COM_PORT "COM4"
+#define COM_PORT "COM3"
 
 #define MAX_NUM_DISPLAY_CHANNELS 21
 #define NUM_ANALOG_CHANNELS 21
@@ -530,6 +530,32 @@ BOOL checkCrosstalk(float64  *data, int size, float64 *minVal, float64 *maxVal)
 		return TRUE;
 }
 
+void enableAllControns(int panel, BOOL enable)
+{
+	int radioButtonsIDs[] ={PANEL_ACQUIRE,
+							PANEL_QUITBUTTON,
+							PANEL_RAMPUP,
+							PANEL_OVERSHOOT,
+							PANEL_ACCURACY,
+							PANEL_PWM,
+							PANEL_CROSSTALK,
+							PANEL_LOAD_VFLR,
+							PANEL_ZOOM_POSITION,
+							PANEL_RUNALLTESTS,
+							PANEL_ZOOM_START,
+							PANEL_ZOOM_LENGTH,
+							PANEL_INIT_HARDWARE,
+							PANEL_PINTEST,
+							PANEL_SERIAL_NUMBER};
+	for (int i=0; i<sizeof(radioButtonsIDs)/sizeof(int); i++) {
+		SetInputMode(panel,radioButtonsIDs[i],enable);
+	}
+	if (enable)
+		SetWaitCursor(0);
+	else
+		SetWaitCursor(1);
+}
+
 void disableControlBoxes(int panel)
 {
 	int radioButtonsIDs[] = {PANEL_RAMPUP,PANEL_OVERSHOOT,PANEL_PWM,PANEL_CROSSTALK,PANEL_ACCURACY};
@@ -801,6 +827,17 @@ int CVICALLBACK sampleRateChange (int panel, int control, int event,
 			break;
 	}
 	return 0;
+}
+void clearGraphs()
+{
+	for (int chan=0; chan<MAX_NUM_DISPLAY_CHANNELS; chan++) {
+		if (analogPlotHandles[chan]!=0)
+			DeleteGraphPlot(PanelHandle,PANEL_GRAPH,   analogPlotHandles[chan], VAL_IMMEDIATE_DRAW);
+		analogPlotHandles[chan] = 0;
+		if (digitalPlotHandles[chan]!=0)
+			DeleteGraphPlot(PanelHandle,PANEL_GRAPH_DIGITAL,   digitalPlotHandles[chan], VAL_IMMEDIATE_DRAW);
+		digitalPlotHandles[chan] = 0;
+	}
 }
 
 void displayAnalogData(const double *data, int nSamples, int start, int end)
@@ -1440,6 +1477,7 @@ int RampupTest(void)
 	NumberOfAnalogSamples = 60000;
 	AnalogSampleRate = 1E6;
 	DisplayStart = 0;
+	clearGraphs();
 	DisplayEnd = NumberOfAnalogSamples/2-1;
 	WriteLog("Start Rampup test\n",TRUE);
 	WriteLog("Sending file\n",TRUE);
@@ -1460,6 +1498,7 @@ int OvershootTest(void)
 	AnalogSampleRate = 1E6;
 	DisplayStart = 265;
 	DisplayEnd = 615;
+	clearGraphs();
 	WriteLog("Start Overshoot test\n",TRUE);
 	WriteLog("Sending file\n",TRUE);
 	useAnalogTask = TRUE;
@@ -1477,6 +1516,7 @@ int PwmTest(void)
 	testID = PANEL_PWM;
 	DisplayStart = 0;
 	DisplayEnd = 2000-1;
+	clearGraphs();
 	WriteLog("Start PWM test\n",TRUE);
 	WriteLog("Sending file\n",TRUE);
 	useAnalogTask = FALSE;
@@ -1495,6 +1535,7 @@ int AnalogAccuracyTest(void)
 	NumberOfAnalogSamples = 20000;
 	AnalogSampleRate = 90000;
 	DisplayStart = 0;
+	clearGraphs();
 	DisplayEnd = NumberOfAnalogSamples-1;
 	WriteLog("Start Accuracy test\n",TRUE);
 	WriteLog("Sending file\n",TRUE);
@@ -1515,6 +1556,7 @@ int CrosstalkTest(void)
 	AnalogSampleRate = 1E5;
 	DisplayStart = 0;
 	DisplayEnd = NumberOfAnalogSamples-1;
+	clearGraphs();
 	WriteLog("Start Crosstalk test\n",TRUE);
 	WriteLog("Sending file\n",TRUE);
 	useAnalogTask = TRUE;
@@ -1533,7 +1575,7 @@ int CVICALLBACK RunTest (int panel, int control, int event,
 	switch (event)
 	{
 		case EVENT_COMMIT:
-
+		enableAllControns(panel,FALSE);
 		GetCtrlVal(panel, PANEL_RAMPUP, &radioButtonValue);		
 		if (radioButtonValue==1) {
 			RampupTest();
@@ -1558,6 +1600,7 @@ int CVICALLBACK RunTest (int panel, int control, int event,
 		if (radioButtonValue==1) {
 			RunPinTest();
 		}
+		enableAllControns(panel,TRUE);
 	}			
 	return 0;
 }
@@ -1572,15 +1615,19 @@ int CVICALLBACK RunAllTests (int panel, int control, int event,
 		case EVENT_COMMIT:
 			for (int i=0; i<sizeof(radioButtonsIDs)/sizeof(int); i++) {
 				SetCtrlVal(panel,radioButtonsIDs[i],0);
-			}	
+			}
+			enableAllControns(panel,FALSE);
 			for (int test = 0; test<sizeof(radioButtonsIDs)/sizeof(int); test++)
 			{
 				SetCtrlVal(panel,radioButtonsIDs[test],1);
 				if (test>0)
 					SetCtrlVal(panel,radioButtonsIDs[test-1],0);
-				if (fun_ptr[test]()!=0)
+				if (fun_ptr[test]()!=0) {
 					MessagePopup("Test Failed","Sequence will be aborted");;
+					break;
+				}
 			}
+			enableAllControns(panel,TRUE);
 			break;
 	}
 	return 0;
@@ -1872,7 +1919,7 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 		case EVENT_COMMIT:
 			char utc_time[50];
 			char set_time[50];
-			
+			enableAllControns(panel,FALSE);
 			getUTCTime(utc_time);
 			strcpy(set_time,"date -u -s \"");
 			strcat(set_time,utc_time);
@@ -1880,7 +1927,8 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 			
 			if (OpenComConfig(comPort,COM_PORT,115200,0,8,1,1000,512)<0) {
 				MessagePopup("Com port error","Cannot open com port");
-				return FALSE;
+				enableAllControns(panel,TRUE);
+				return 1;
 			}
 			SetComTime(comPort,1.0);	// Set timeout for 1 sec
 			ComWrtByte(comPort, cr);
@@ -1889,7 +1937,8 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				buffer[nB] = 0;
 				if (check_login(comPort,buffer)==0) {
 					CloseCom(comPort);
-					return 0;
+					enableAllControns(panel,TRUE);
+					return 2;
 				}
 			}
 			// Set system time
@@ -1897,9 +1946,11 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				WriteLog("Setting system time\n",TRUE);
 				FlushInQ(comPort);
 				ComWrt(comPort,set_time,strlen(set_time));
+				ProcessSystemEvents();
 				Delay(1.0);
 				nB = ComRd(comPort,buffer,10000);
 				ComWrt(comPort,"hwclock -u -w\r",14);
+				ProcessSystemEvents();
 				Delay(1.0);
 				FlushInQ(comPort);
 				ComWrt(comPort,"hwclock\r",8);
@@ -1920,11 +1971,13 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 					CloseCom(comPort);
 					MessagePopup("Error","SSD is not connected");
 					WriteLog("SSD is not connected",FALSE);
-					return 0;
+					enableAllControns(panel,TRUE);
+					return 3;
 				}
 				WriteLog("Formating SSD\n",TRUE);
 				FlushInQ(comPort);
 				ComWrt(comPort,"fdisk -H32 -S32 /dev/sda\r",25);
+				ProcessSystemEvents();
 				Delay(0.5);
 				FlushInQ(comPort);
 				ComWrt(comPort,"n\r",2);
@@ -1934,17 +1987,22 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				if (strstr(buffer,"All space for primary")!=NULL) {
 					MessagePopup("Error","SSD is already formatted. Script will continue");
 					ComWrtByte(comPort,3); 	// ^c
+					ProcessSystemEvents();
 					Delay(0.5);
 					ComWrtByte(comPort,13);	// cr
 				}
 				else {
 					ComWrt(comPort,"p\r",2);
+					ProcessSystemEvents();
 					Delay(0.5);
 					ComWrt(comPort,"1\r",2);
+					ProcessSystemEvents();
 					Delay(0.5);
 					ComWrt(comPort,"2048\r",5);
+					ProcessSystemEvents();
 					Delay(0.5);
 					ComWrt(comPort,"\r",1);
+					ProcessSystemEvents();
 					Delay(0.5);
 					ComWrt(comPort,"w\r",2);
 					nB = ComRd(comPort,buffer,10000);
@@ -1952,7 +2010,8 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 					WriteLog(buffer,FALSE);
 					if (strstr(buffer,"Syncing disks")==NULL) {
 						MessagePopup("Error","Cannot start SSD formating");
-						return 1;
+						enableAllControns(panel,TRUE);
+						return 4;
 					}
 					if (strstr(buffer,"root@vulcanform")==NULL) {
 						for (int i=0; i<10; i++) {
@@ -1970,13 +2029,15 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 						formatComplete = TRUE;
 					if (!formatComplete) {
 						MessagePopup("Timeout","Cannot complete SSD formating");
-						return 1;
+						enableAllControns(panel,TRUE);
+						return 5;
 					}
 					WriteLog("Rebooting LCR. Please Wait 60 secs\n",TRUE);
 					for (int sec=60; sec>=0; sec--) {
 						char txt[10];
 						sprintf(txt,"%d",sec);
 						SetCtrlVal(PanelHandle,PANEL_TEXT_COUNTER,txt);
+						ProcessSystemEvents();
 						Delay(1.0);
 					}
 					SetCtrlVal(PanelHandle,PANEL_TEXT_COUNTER,"");
@@ -1991,7 +2052,8 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 					if (check_login(comPort,buffer)==0) {
 						MessagePopup("ERROR","Cannot login after reboot");
 						CloseCom(comPort);
-						return FALSE;
+						enableAllControns(panel,TRUE);
+						return 6;
 					}
 					ComWrt(comPort,"hdparm -i /dev/sda\r",19);
 					nB = ComRd(comPort,buffer,10000);
@@ -1999,15 +2061,18 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 					if (strstr(buffer,"Samsung")==NULL) {
 						MessagePopup("ERROR","Wrong SSD model");
 						CloseCom(comPort);
-						return FALSE;
+						enableAllControns(panel,TRUE);
+						return 7;
 					}
 					WriteLog("SSD formatting completed\n",TRUE);
+					ProcessSystemEvents();
 					Delay(1.0);
 				}
 				// Creating filesystem
 				FlushInQ(comPort);
 				strcpy(command,"mkfs.ext4 -O extent -b 4096 -E stride=128,stripe-width=128 /dev/sda1\r");
 				ComWrt(comPort,command,strlen(command));
+				ProcessSystemEvents();
 				Delay(6.0);
 				nB = ComRd(comPort,buffer,10000);
 				buffer[nB] = 0;
@@ -2019,24 +2084,26 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				else {
 					if (strstr(buffer,"Writing superblocks and filesystem accounting information")==NULL) {
 						MessagePopup("Error","Cannot create filesystem");
-						return FALSE;
+						enableAllControns(panel,TRUE);
+						return 8;
 					}
 					WriteLog("Creating filesystem completed\n",FALSE);
 				}
 			}
 			if (copyFiles) {
+				ProcessSystemEvents();
 				if (createFolders()!=0)
 					WriteLog("ERROR: Cannot create folders\n",TRUE);
 				else {
 					if (copyAllFiles()!=0) {
-						MessagePopup("ERROR","Cannot copy all files");
-						retVal = FALSE;
+						MessagePopup("ERROR","Cannot copy all files");						
+						retVal = 9;
 					}
 					else
 					{
 						if (changePermissions()!=0) {
 							MessagePopup("ERROR","Cannot change file permissions");
-							retVal = FALSE;
+							retVal = 10;
 						}
 					}
 				}
@@ -2046,6 +2113,7 @@ int CVICALLBACK InitHardware (int panel, int control, int event,
 				MessagePopup("Info","VFLCR system init completed");
 			else
 				MessagePopup("Error","Error during initilalization");
+			enableAllControns(panel,TRUE);
 			break;
 	}
 	return 0;
