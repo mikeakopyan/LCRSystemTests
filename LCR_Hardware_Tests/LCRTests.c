@@ -154,6 +154,7 @@ void WriteLog(const char *msg, BOOL writeToScreen)
 //==============================================================================
 // Global functions
 int RunPinTest(void);
+void InitLocks(void);
 
 /// HIFN The main entry-point function.
 int main (int argc, char *argv[])
@@ -168,6 +169,8 @@ int main (int argc, char *argv[])
 	errChk (PanelHandle = LoadPanel (0, "LCRTests.uir", PANEL));
 
 	SetCtrlVal(PanelHandle,PANEL_TEXT_COUNTER,"");
+
+	InitLocks();
 
 #ifdef USE_PLC
 	if (!OPC_Init(TEST_PLC_IP_ADDRESS)) {
@@ -230,23 +233,51 @@ void enableButtons(int panel, int enable)
 	}
 }
 
+BOOL saveAnalogDataInProgress = FALSE;
+BOOL saveDigitalDataInProgress = FALSE;
+
 //==============================================================================
 // UI callback function prototypes
+
+int tryToExitApp(int panel)
+{
+	if (running) {
+		running = FALSE;
+		SetCtrlAttribute(panel, PANEL_LOAD_VFLR,ATTR_LABEL_TEXT, "Load & Run vfr File");
+		enableButtons(panel,1);
+		return 1;
+	}
+	if (saveAnalogDataInProgress || saveDigitalDataInProgress) {
+		MessagePopup("Data saving in progress","Please wait");
+		return 1;
+	}
+	return 0;
+}
 
 /// HIFN Exit when the user dismisses the panel.
 int CVICALLBACK panelCB (int panel, int event, void *callbackData,
 		int eventData1, int eventData2)
 {
 	if (event == EVENT_CLOSE) {
-			if (running) {
-				running = FALSE;
-				SetCtrlAttribute(panel, PANEL_LOAD_VFLR,ATTR_LABEL_TEXT, "Load & Run vfr File");
-				enableButtons(panel,1);
-				return 1;
-			}
-     	//DAQmxClearTask(analogTask);
-		//DAQmxClearTask(digitalTask);
-		QuitUserInterface (0);
+		if (tryToExitApp(panel)==0)
+			QuitUserInterface (0);
+		else
+			return 1;
+	}
+	return 0;
+}
+
+
+int CVICALLBACK QuitCallback (int panel, int control, int event,
+							  void *callbackData, int eventData1, int eventData2)
+{
+	switch (event)
+	{
+		case EVENT_COMMIT:
+					if (tryToExitApp(panel)==0)
+			QuitUserInterface (0);
+		else
+			return 1;
 	}
 	return 0;
 }
@@ -574,6 +605,45 @@ void restCheckBoxes(int panel, int keepOn)
 	}
 }
 
+struct saveAnalogDataElem
+{
+	float64 *data;
+	int size;
+	int numChanels;
+	int samplingRate;
+	char name[512];
+};
+
+struct saveDigitalDataElem
+{
+	uint32_t *data;
+	int size;
+	int samplingRate;
+	char name[512];
+};
+
+#define POOL_SIZE 1000
+
+CmtThreadLockHandle saveAnalogDataPoolLock;
+int saveAnalogDataThreadID = 0;
+int saveAnalogDataPoolHead = 0;
+int saveAnalogDataPoolTail = 0;
+int saveAnalogDataPoolSize = 0;
+struct saveAnalogDataElem saveAnalogDataPool[POOL_SIZE];
+
+CmtThreadLockHandle saveDigitalDataPoolLock;
+int saveDigitalDataThreadID = 0;
+int saveDigitalDataPoolHead = 0;
+int saveDigitalDataPoolTail = 0;
+int saveDigitalDataPoolSize = 0;
+struct saveDigitalDataElem saveDigitalDataPool[POOL_SIZE];
+
+
+void InitLocks(void)
+{
+	CmtNewLock (NULL, 0, &saveAnalogDataPoolLock);
+	CmtNewLock (NULL, 0, &saveDigitalDataPoolLock);
+}
 void SaveAnalogData(const char *name, float64 *data, int size, int numChannels, int samplingRate)
 {
 	FILE *f = fopen(name,"wb");
@@ -585,6 +655,51 @@ void SaveAnalogData(const char *name, float64 *data, int size, int numChannels, 
 		fwrite(data,sizeof(float64),size*numChannels,f);
 		fclose(f);
 	}
+}
+
+int CVICALLBACK SaveAnalogDataThread (void *functionData)
+{
+	BOOL keepRunning = TRUE;
+	struct saveAnalogDataElem poolElem = {0};
+	while (keepRunning) {
+		CmtGetLock(saveAnalogDataPoolLock);
+		if (saveAnalogDataPoolSize!=0) {
+			memcpy(&poolElem,&saveAnalogDataPool[saveAnalogDataPoolHead],sizeof(struct saveAnalogDataElem));
+			if (++saveAnalogDataPoolHead>=POOL_SIZE)
+				saveAnalogDataPoolHead = 0;
+			saveAnalogDataPoolSize--;
+		}
+		else {
+			keepRunning = FALSE;
+			saveAnalogDataInProgress = FALSE;
+		}
+		CmtReleaseLock (saveAnalogDataPoolLock);
+		if (keepRunning) {
+			SaveAnalogData(poolElem.name, poolElem.data, poolElem.size,
+							   poolElem.numChanels,poolElem.samplingRate);
+			free(poolElem.data);
+		}
+	}
+	return 0;
+}
+
+void SaveAnalogDataAsync(const char *name, float64 *dataPtr, int size, int numChannels, int samplingRate)
+{
+	CmtGetLock(saveAnalogDataPoolLock);
+	saveAnalogDataPool[saveAnalogDataPoolTail].data = dataPtr;
+	saveAnalogDataPool[saveAnalogDataPoolTail].size = size;
+	saveAnalogDataPool[saveAnalogDataPoolTail].numChanels = numChannels;
+	saveAnalogDataPool[saveAnalogDataPoolTail].samplingRate = samplingRate;
+	strcpy(saveAnalogDataPool[saveAnalogDataPoolTail].name,name);
+	if (++saveAnalogDataPoolTail>=POOL_SIZE)
+		saveAnalogDataPoolTail = 0;
+	saveAnalogDataPoolSize++;
+	if (!saveAnalogDataInProgress) {
+		saveAnalogDataInProgress = TRUE;
+		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
+										SaveAnalogDataThread, NULL, &saveAnalogDataThreadID);
+	}
+	CmtReleaseLock (saveAnalogDataPoolLock);
 }
 
 void SaveAnalogDataTxt(const char *name, float64 *data, int size, int numChannels, int samplingRate)
@@ -614,6 +729,50 @@ void SaveDigitalPortData(const char *name, uint32_t *data, int size, int samplin
 		fclose(f);
 	}
 }
+
+int CVICALLBACK SaveDigitalDataThread (void *functionData)
+{
+	BOOL keepRunning = TRUE;
+	struct saveDigitalDataElem poolElem = {0};
+	while (keepRunning) {
+		CmtGetLock(saveDigitalDataPoolLock);
+		if (saveDigitalDataPoolSize!=0) {
+			memcpy(&poolElem,&saveDigitalDataPool[saveDigitalDataPoolHead],sizeof(struct saveDigitalDataElem));
+			if (++saveDigitalDataPoolHead>=POOL_SIZE)
+				saveDigitalDataPoolHead = 0;
+			saveDigitalDataPoolSize--;
+		}
+		else {
+			keepRunning = FALSE;
+			saveDigitalDataInProgress = FALSE;
+		}
+		CmtReleaseLock (saveDigitalDataPoolLock);
+		if (keepRunning) {
+			SaveDigitalPortData(poolElem.name, poolElem.data, poolElem.size, poolElem.samplingRate);
+			free(poolElem.data);
+		}
+	}
+	return 0;
+}
+
+void SaveDigitalPortDataAsync(const char *name, uint32_t *dataPtr, int size, int samplingRate)
+{
+	CmtGetLock(saveDigitalDataPoolLock);
+	saveDigitalDataPool[saveDigitalDataPoolTail].data = dataPtr;
+	saveDigitalDataPool[saveDigitalDataPoolTail].size = size;
+	saveDigitalDataPool[saveDigitalDataPoolTail].samplingRate = samplingRate;
+	strcpy(saveDigitalDataPool[saveDigitalDataPoolTail].name,name);
+	if (++saveDigitalDataPoolTail>=POOL_SIZE)
+		saveDigitalDataPoolTail = 0;
+	saveDigitalDataPoolSize++;
+	if (!saveDigitalDataInProgress) {
+		saveDigitalDataInProgress = TRUE;
+		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
+										SaveDigitalDataThread, NULL, &saveAnalogDataThreadID);
+	}
+	CmtReleaseLock (saveDigitalDataPoolLock);
+}
+
 
 void SaveDigitalPortDataTxt(const char *name, uint32_t *data, int size, int samplingRate)
 {
@@ -736,23 +895,6 @@ int CVICALLBACK DataAcqDigitalThreadFunction (void *functionData)
 	DAQmxClearTask(task);
 
     return error;
-}
-
-int CVICALLBACK QuitCallback (int panel, int control, int event,
-							  void *callbackData, int eventData1, int eventData2)
-{
-	switch (event)
-	{
-		case EVENT_COMMIT:
-			if (running) {
-				running = FALSE;
-				SetCtrlAttribute(panel, PANEL_LOAD_VFLR,ATTR_LABEL_TEXT, "Load & Run vfr File");
-				enableButtons(panel,1);
-			}
-			QuitUserInterface(0);
-			break;
-	}
-	return 0;
 }
 
 int CVICALLBACK Runup (int panel, int control, int event,
@@ -1029,19 +1171,19 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 #ifdef USE_PLC
 	setPartNumberEtc(filePath);
 #endif
-	if (AnalogData!=0)
-		free(AnalogData);
-	AnalogData = malloc(NUM_ANALOG_CHANNELS*NumberOfAnalogSamples*sizeof(float64));
-
-	if (DigitalPortData!=0)
-		free(DigitalPortData);
-	DigitalPortData = malloc(NumberOfDigitalSamples*sizeof(uint32_t));
-
 #ifdef USE_PLC
 	OPC_SetOpenLayer(1);
 #endif
 	for (int trajectory=0; trajectory<nTrajectories; trajectory++)
 	{
+		if (AnalogData!=0)
+			free(AnalogData);
+		AnalogData = malloc(NUM_ANALOG_CHANNELS*NumberOfAnalogSamples*sizeof(float64));
+
+		if (DigitalPortData!=0)
+			free(DigitalPortData);
+		DigitalPortData = malloc(NumberOfDigitalSamples*sizeof(uint32_t));
+
 		if (running == FALSE)
 			break;
 		char str[100];
@@ -1068,10 +1210,15 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 		sprintf(str,"Trajectory %d\n",trajectory);
 		WriteLog(str,TRUE);
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, 0);
-		SaveAnalogData(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
+		displayAnalogData(AnalogData,NumberOfAnalogSamples,displayStart,displayEnd);
+		SaveAnalogDataAsync(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
+		AnalogData = NULL;
 
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
-		SaveDigitalPortData(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
+		displayDigitalData(DigitalPortData, digitalToAnalogRateRatio*displayStart,
+		 				   digitalToAnalogRateRatio*(displayEnd+1)-1);
+		SaveDigitalPortDataAsync(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
+		DigitalPortData = NULL;
 #ifdef USE_PLC
 		for (int k = 0; k < 5; k++)
 		{
@@ -1082,10 +1229,7 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 			WriteLog("Counter reset retry to set to 1\n",TRUE);
 		}
 #endif
-		displayAnalogData(AnalogData,NumberOfAnalogSamples,displayStart,displayEnd);
-		displayDigitalData(DigitalPortData,
-						   digitalToAnalogRateRatio*displayStart,
-						   digitalToAnalogRateRatio*(displayEnd+1)-1);
+
 	}
 	if (running)
 		WriteLog("Test completed\n",TRUE);
@@ -1298,13 +1442,13 @@ int ExecuteTest(void)
 		double timeScale = (double)AnalogSampleRate/(4*EncoderFrequency);
 		const char *analogFileName = "C:/Temp/AnalogData.csv";
 		const char *digitalFileName = "C:/Temp/PortData.csv";
-		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, 0);
+		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, OPT_TP_PROCESS_EVENTS_WHILE_WAITING );
 		WriteLog("Saving analog data\n",TRUE);
 		SaveAnalogData(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
 		if (readDigitalPort) {
-			CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
+			CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, OPT_TP_PROCESS_EVENTS_WHILE_WAITING );
 			WriteLog("Saving digital data\n",TRUE);
-			SaveDigitalPortDataTxt(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
+			SaveDigitalPortData(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
 		}
 		strcpy(txtResults,"");
 
@@ -1409,9 +1553,9 @@ int ExecuteTest(void)
 			WriteLog(txtResults,TRUE);
 	}
 	if (useDigitalTask) {
-		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
+		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, OPT_TP_PROCESS_EVENTS_WHILE_WAITING );
 		WriteLog("Saving digital port data\n",TRUE);
-		SaveDigitalPortDataTxt("C:/Temp/PortData.csv",DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
+		SaveDigitalPortData("C:/Temp/PortData.csv",DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
 		strcpy(txtResults,"");
 		if (testID == PANEL_PWM) {
 			for (int chan=0; chan<NUM_DIGITAL_CHANNELS_TO_CHECK; chan++) {

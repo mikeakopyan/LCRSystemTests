@@ -13,10 +13,10 @@ Number of Projects = 1
 Active Project = 1
 Project 0001 = "LCR_Hardware_Tests.prj"
 Drag Bar Left = 238
-Window Top = 81
-Window Left = -246
-Window Bottom = 1056
-Window Right = 1507
+Window Top = 65
+Window Left = 89
+Window Bottom = 1039
+Window Right = 1842
 Maximized = False
 Maximized Children = True
 Max32 Number Of Errors = 20
@@ -40,7 +40,7 @@ FileSizeColumnWidth = 70
 Version = 2000
 Don't Update DistKit = False
 Platform Code = 4
-Build Configuration = "Debug64"
+Build Configuration = "Release64"
 Warn User If Debugging Release = 0
 Batch Build Release = False
 Batch Build Debug = False
@@ -54,24 +54,24 @@ Window Top = 157
 Window Left = 74
 Window Height = 281
 Window Width = 637
-Window Z-Order = 3
+Window Z-Order = 6
 
 [File 0002]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRFTP/LCRFTP.c"
 File Type = "CSource"
 Disk Date = 3722423341
 In Projects = "1,"
-Source Window State = "1,32,32,32,4,17,4,0,3,0,0,0,0,0,0,0,30,0,32,17,281,637,1,0,"
+Source Window State = "1,32,32,32,4,17,4,0,3,0,0,0,0,0,0,0,18,0,32,17,281,637,1,0,"
 Window Top = 95
 Window Left = 42
-Window Z-Order = 2
+Window Z-Order = 8
 
 [File 0003]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.c"
 File Type = "CSource"
-Disk Date = 3722952173
+Disk Date = 3724668044
 In Projects = "1,"
-Source Window State = "1,1342,1342,1342,0,13,13,0,3,0,0,0,0,0,0,0,1328,0,1342,0,845,1540,1,0,"
+Source Window State = "1,1216,1216,1216,96,96,96,0,0,0,0,0,0,0,0,0,1201,0,1216,96,845,1540,1,0,"
 Window Top = 107
 Window Left = 91
 Window Z-Order = 1
@@ -84,7 +84,7 @@ In Projects = ""
 Source Window State = "1,1681,1681,1681,8,20,8,0,3,0,0,0,0,0,0,0,1681,0,1681,20,401,602,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 6
+Window Z-Order = 11
 
 [File 0005]
 Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/ansi/stdio.h"
@@ -104,66 +104,66 @@ In Projects = ""
 Source Window State = "1,16,34,34,0,28,28,0,3,0,0,0,0,0,0,0,9,0,16,0,401,602,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 4
+Window Z-Order = 9
 
 [File 0007]
 Path = "/c/Projects/LCRSystemTests/OPCDll/OPCDll/OPCDll.h"
 File Type = "Include"
 Disk Date = 3719230369
 In Projects = ""
-Source Window State = "1,70,70,70,18,26,18,0,3,0,0,0,0,0,0,0,42,0,70,26,401,749,1,0,"
+Source Window State = "1,70,70,70,18,26,18,0,3,0,0,0,0,0,0,0,47,0,70,26,401,749,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 7
+Window Z-Order = 12
 
 [File 0008]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.c"
 File Type = "CSource"
-Disk Date = 3718991399
+Disk Date = 3724667561
 In Projects = "1,"
 Source Window State = "1,30,30,30,4,62,4,0,3,0,0,0,0,0,0,0,30,0,30,62,400,600,1,0,"
 Window Top = 31
-Window Z-Order = 13
+Window Z-Order = 5
 
 [File 0009]
 Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/utility.h"
 File Type = "Include"
 Disk Date = 3679674624
 In Projects = ""
-Source Window State = "1,657,657,657,15,31,15,0,3,0,0,0,0,0,0,0,643,0,657,31,296,602,1,0,"
+Source Window State = "1,440,440,440,17,36,17,0,3,0,0,0,0,0,0,0,428,0,440,36,296,602,1,0,"
 Window Top = 157
 Window Left = 74
-Window Z-Order = 8
+Window Z-Order = 7
 
 [File 0010]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.h"
 File Type = "Include"
-Disk Date = 3718991399
+Disk Date = 3724667561
 In Projects = "1,"
-Source Window State = "1,29,29,29,0,0,0,0,0,0,0,0,0,0,0,0,1,0,29,0,371,637,1,0,"
+Source Window State = "1,28,28,28,6,28,6,0,3,0,0,0,0,0,0,0,5,0,28,28,371,637,1,0,"
 Window Top = 126
 Window Left = 58
-Window Z-Order = 12
+Window Z-Order = 4
 
 [File 0011]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.c"
 File Type = "CSource"
-Disk Date = 3718991507
+Disk Date = 3724667575
 In Projects = "1,"
-Source Window State = "1,30,30,30,4,63,4,0,3,0,0,0,0,0,0,0,4,0,30,63,281,637,1,0,"
+Source Window State = "1,30,30,30,4,63,4,0,3,0,0,0,0,0,0,0,7,0,30,63,281,637,1,0,"
 Window Top = 64
 Window Left = 26
-Window Z-Order = 11
+Window Z-Order = 3
 
 [File 0012]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.h"
 File Type = "Include"
-Disk Date = 3718991507
+Disk Date = 3724667575
 In Projects = "1,"
-Source Window State = "1,28,28,28,6,29,6,0,3,0,0,0,0,0,0,0,1,0,28,29,371,602,1,0,"
+Source Window State = "1,28,28,28,6,29,6,0,3,0,0,0,0,0,0,0,5,0,28,29,371,602,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 10
+Window Z-Order = 2
 
 [File 0013]
 Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/ansi/time.h"
@@ -173,7 +173,7 @@ In Projects = ""
 Source Window State = "1,67,67,67,5,5,5,0,0,0,0,0,0,0,0,0,67,0,67,5,401,665,1,0,"
 Window Top = 95
 Window Left = 42
-Window Z-Order = 9
+Window Z-Order = 13
 
 [File 0014]
 Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/rs232.h"
@@ -183,18 +183,18 @@ In Projects = ""
 Source Window State = "1,68,68,68,12,22,12,0,3,0,0,0,0,0,0,0,55,0,68,22,401,665,1,0,"
 Window Top = 126
 Window Left = 58
-Window Z-Order = 5
+Window Z-Order = 10
 
 [File 0015]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.mxb"
 File Type = "Unknown"
-Disk Date = 3718991399
+Disk Date = 3724667561
 In Projects = "1,"
 
 [File 0016]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.mxb"
 File Type = "Unknown"
-Disk Date = 3718991507
+Disk Date = 3724667575
 In Projects = "1,"
 
 [File 0017]
@@ -210,14 +210,14 @@ Tab 0003 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.c"
 Tab 0004 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRFTP/LCRFTP.c"
 Tab 0005 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.uir"
 Tab 0006 = "/c/Program Files (x86)/National Instruments/CVI2020/include/utility.h"
-Tab 0007 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.c"
-Tab 0008 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.h"
-Tab 0009 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.c"
-Tab 0010 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.h"
-Tab 0011 = "/c/Projects/LCRSystemTests/OPCDll/OPCDll/OPCDll.h"
-Tab 0012 = "/c/Program Files (x86)/National Instruments/CVI2020/include/ansi/time.h"
-Tab 0013 = "/c/Program Files (x86)/National Instruments/CVI2020/include/rs232.h"
-Tab 0014 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.h"
+Tab 0007 = "/c/Projects/LCRSystemTests/OPCDll/OPCDll/OPCDll.h"
+Tab 0008 = "/c/Program Files (x86)/National Instruments/CVI2020/include/ansi/time.h"
+Tab 0009 = "/c/Program Files (x86)/National Instruments/CVI2020/include/rs232.h"
+Tab 0010 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.h"
+Tab 0011 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.c"
+Tab 0012 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.h"
+Tab 0013 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.c"
+Tab 0014 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.h"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True
