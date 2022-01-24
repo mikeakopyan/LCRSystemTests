@@ -25,6 +25,8 @@
 #include <NIDAQmx.h>
 #include "../OPCDll/OPCDll/OPCDll.h"
 
+#define MAX_PATH 1000
+
 #define DAQmxErrChk(functionCall) if( DAQmxFailed(error=(functionCall)) ) goto Error; else
 
 extern int sendToLCR(char *name);
@@ -227,7 +229,8 @@ Error:
 void enableButtons(int panel, int enable)
 {
 	int buttonsIDs[] = {PANEL_QUITBUTTON,PANEL_ACQUIRE,PANEL_RUNALLTESTS, PANEL_ZOOM_POSITION,
-					   PANEL_RAMPUP,PANEL_OVERSHOOT,PANEL_PWM,PANEL_CROSSTALK,PANEL_ACCURACY};
+					   PANEL_RAMPUP,PANEL_OVERSHOOT,PANEL_PWM,PANEL_CROSSTALK,PANEL_ACCURACY,
+					   PANEL_INIT_HARDWARE};
 	for (int i=0; i<sizeof(buttonsIDs)/sizeof(int); i++) {
 			SetCtrlAttribute(panel,buttonsIDs[i],ATTR_DIMMED, 1-enable);
 	}
@@ -1143,6 +1146,46 @@ void setPartNumberEtc(const char *filePath)
     OPC_SetSelectedLayer(layer);
 }
 
+int MoveFiles(const char *vflrFile, int nTrajectories)
+{
+	char analogFileName[MAX_PATH];
+	char digitalFileName[MAX_PATH];
+	char outputFolder[MAX_PATH];
+	strcpy(outputFolder,"");
+	for (int i=(int)strlen(vflrFile)-1; i>=0; i--) {
+		if (vflrFile[i]=='/' || vflrFile[i] == '\\') {
+			for (int j=0; j<i+1; j++)
+				outputFolder[j] = vflrFile[j];
+			outputFolder[i+1] = 0;
+			break;
+		}
+	}
+	if (strlen(outputFolder)==0)
+		return 1;
+	for (int trajectory=0; trajectory<nTrajectories; trajectory++) {
+		char outputFilePath[250];
+		sprintf(analogFileName,"C:\\Temp\\AnalogData%d.dat",trajectory);
+		sprintf(outputFilePath,"%sAnalogData%d.dat",outputFolder,trajectory);
+		RemoveFileIfExists(outputFilePath);
+		if (RenameFile(analogFileName,outputFilePath)!=0) {
+			char text[MAX_PATH+50];
+			sprintf(text,"Cannot move file %s",analogFileName);
+			MessagePopup("Moving error",text);
+			return 2;
+		}
+		sprintf(digitalFileName,"C:\\Temp\\PortData%d.dat",trajectory);
+		sprintf(outputFilePath,"%sPortData%d.dat",outputFolder,trajectory);
+		RemoveFileIfExists(outputFilePath);
+		if (RenameFile(digitalFileName,outputFilePath)!=0) {
+			char text[MAX_PATH+50];
+			sprintf(text,"Cannot move file %s",digitalFileName);
+			MessagePopup("Moving error",text);
+			return 3;
+		}
+	}
+	return 0;
+}
+
 int loadAndRunVFLR(char *filePath, int nTrajectories)
 {
 	int opcStatus;
@@ -1155,7 +1198,8 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 	NumberOfDigitalSamples = digitalToAnalogRateRatio*NumberOfAnalogSamples;
 	AnalogSampleRate = 1E6;
 	displayStart = 0;
-	displayEnd = NumberOfAnalogSamples/100-1;
+	displayEnd = NumberOfAnalogSamples/50-1;
+	DeleteFile("c:/Temp/vflrFileName.txt");
 	enableZoom(TRUE);
 	WriteLog("Sending file\n",TRUE);
 #ifdef USE_LCR
@@ -1187,16 +1231,26 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 		if (running == FALSE)
 			break;
 		char str[100];
-		char analogFileName[200];
-		char digitalFileName[200];
+		char analogFileName[MAX_PATH];
+		char digitalFileName[MAX_PATH];
 		sprintf(analogFileName,"C:/Temp/AnalogData%d.dat",trajectory);
 		sprintf(digitalFileName,"C:/Temp/PortData%d.dat",trajectory);
 		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
-										DataAcqAnalogThreadFunction, NULL, &analogThreadID);
+		DataAcqAnalogThreadFunction, NULL, &analogThreadID);
 		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
-							   			DataAcqDigitalThreadFunction, NULL, &digitalThreadID);
+		DataAcqDigitalThreadFunction, NULL, &digitalThreadID);
 
-		Delay(1.0);
+#ifdef USE_PLC
+		for (int k = 0; k < 5; k++)
+		{
+			opcStatus = OPC_SetEnablePulseGenerator(0);
+			if (opcStatus==0)
+				break;
+			Delay(0.5);
+			WriteLog("Pulse generator enable retry to set to 0\n",TRUE);
+		}
+#endif
+		Delay(0.8);
 #ifdef USE_PLC
 		for (int k = 0; k < 5; k++)
 		{
@@ -1205,16 +1259,18 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 				break;
 			Delay(0.5);
 			WriteLog("Counter reset retry to set to 0\n",TRUE);
-		}		
+		}
+		Delay(0.2);
+		OPC_SetEnablePulseGenerator(1);
 #endif
 		sprintf(str,"Trajectory %d\n",trajectory);
 		WriteLog(str,TRUE);
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, 0);
+		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
+		clearGraphs();
 		displayAnalogData(AnalogData,NumberOfAnalogSamples,displayStart,displayEnd);
 		SaveAnalogDataAsync(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
 		AnalogData = NULL;
-
-		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
 		displayDigitalData(DigitalPortData, digitalToAnalogRateRatio*displayStart,
 		 				   digitalToAnalogRateRatio*(displayEnd+1)-1);
 		SaveDigitalPortDataAsync(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
@@ -1231,8 +1287,14 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 #endif
 
 	}
-	if (running)
+	if (running) {
+		WriteLog("Moving data files\n",TRUE);
+		MoveFiles(filePath, nTrajectories);
 		WriteLog("Test completed\n",TRUE);
+		FILE *f = fopen("c:/Temp/vflrFileName.txt","w");
+		fprintf(f,"%s",filePath);
+		fclose(f);
+	}
 	else
 		WriteLog("Test cancelled\n",TRUE);
 #ifdef USE_PLC	
@@ -1444,11 +1506,11 @@ int ExecuteTest(void)
 		const char *digitalFileName = "C:/Temp/PortData.csv";
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, OPT_TP_PROCESS_EVENTS_WHILE_WAITING );
 		WriteLog("Saving analog data\n",TRUE);
-		SaveAnalogData(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
+		SaveAnalogDataTxt(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
 		if (readDigitalPort) {
 			CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, OPT_TP_PROCESS_EVENTS_WHILE_WAITING );
 			WriteLog("Saving digital data\n",TRUE);
-			SaveDigitalPortData(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
+			SaveDigitalPortDataTxt(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
 		}
 		strcpy(txtResults,"");
 
