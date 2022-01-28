@@ -13,10 +13,10 @@ Number of Projects = 1
 Active Project = 1
 Project 0001 = "LCR_Hardware_Tests.prj"
 Drag Bar Left = 238
-Window Top = 70
-Window Left = 74
-Window Bottom = 998
-Window Right = 1754
+Window Top = 58
+Window Left = 116
+Window Bottom = 938
+Window Right = 1796
 Maximized = False
 Maximized Children = True
 Max32 Number Of Errors = 20
@@ -54,24 +54,24 @@ Window Top = 157
 Window Left = 74
 Window Height = 281
 Window Width = 637
-Window Z-Order = 10
+Window Z-Order = 4
 
 [File 0002]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRFTP/LCRFTP.c"
 File Type = "CSource"
 Disk Date = 3722423341
 In Projects = "1,"
-Source Window State = "1,32,32,32,4,17,4,0,3,0,0,0,0,0,0,0,18,0,32,17,281,637,1,0,"
+Source Window State = "1,32,32,32,4,17,4,0,3,0,0,0,0,0,0,0,17,0,32,17,281,637,1,0,"
 Window Top = 95
 Window Left = 42
-Window Z-Order = 12
+Window Z-Order = 14
 
 [File 0003]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.c"
 File Type = "CSource"
-Disk Date = 3725906368
+Disk Date = 3726248403
 In Projects = "1,"
-Source Window State = "1,1292,1292,1292,0,0,0,0,0,0,0,0,0,0,0,0,1284,0,1292,0,845,1540,1,0,"
+Source Window State = "1,1361,1361,1361,39,39,39,0,0,0,0,0,0,0,0,0,1349,0,1361,39,845,1540,1,0,"
 Window Top = 107
 Window Left = 91
 Window Z-Order = 1
@@ -81,20 +81,20 @@ Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/userint.h"
 File Type = "Include"
 Disk Date = 3679674590
 In Projects = ""
-Source Window State = "1,1681,1681,1681,8,20,8,0,3,0,0,0,0,0,0,0,1681,0,1681,20,401,602,1,0,"
+Source Window State = "1,2654,2654,2654,12,18,12,0,3,0,0,0,0,0,0,0,2640,0,2654,18,401,602,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 15
+Window Z-Order = 3
 
 [File 0005]
 Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/ansi/stdio.h"
 File Type = "Include"
 Disk Date = 3679674621
 In Projects = ""
-Source Window State = "1,220,220,220,0,0,0,0,0,0,0,0,0,0,0,0,209,0,220,0,401,602,1,0,"
+Source Window State = "1,210,210,210,13,18,13,0,3,0,0,0,0,0,0,0,209,0,210,18,401,602,1,0,"
 Window Top = 64
 Window Left = 26
-Window Z-Order = 17
+Window Z-Order = 2
 
 [File 0006]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.h"
@@ -104,7 +104,7 @@ In Projects = ""
 Source Window State = "1,16,34,34,0,28,28,0,3,0,0,0,0,0,0,0,9,0,16,0,401,602,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 13
+Window Z-Order = 15
 
 [File 0007]
 Path = "/c/Projects/LCRSystemTests/OPCDll/OPCDll/OPCDll.h"
@@ -114,7 +114,7 @@ In Projects = ""
 Source Window State = "1,20,20,20,18,45,18,0,3,0,0,0,0,0,0,0,7,0,20,45,401,749,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 4
+Window Z-Order = 7
 
 [File 0008]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.c"
@@ -123,7 +123,7 @@ Disk Date = 3724667561
 In Projects = "1,"
 Source Window State = "1,30,30,30,4,62,4,0,3,0,0,0,0,0,0,0,30,0,30,62,400,600,1,0,"
 Window Top = 31
-Window Z-Order = 9
+Window Z-Order = 12
 
 [File 0009]
 Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/utility.h"
@@ -133,37 +133,37 @@ In Projects = ""
 Source Window State = "1,440,440,440,17,36,17,0,3,0,0,0,0,0,0,0,428,0,440,36,296,602,1,0,"
 Window Top = 157
 Window Left = 74
-Window Z-Order = 11
+Window Z-Order = 13
 
 [File 0010]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.h"
 File Type = "Include"
 Disk Date = 3724667561
 In Projects = "1,"
-Source Window State = "1,28,28,28,6,28,6,0,3,0,0,0,0,0,0,0,14,0,28,28,371,637,1,0,"
+Source Window State = "1,28,28,28,6,28,6,0,3,0,0,0,0,0,0,0,7,0,28,28,371,637,1,0,"
 Window Top = 126
 Window Left = 58
-Window Z-Order = 8
+Window Z-Order = 11
 
 [File 0011]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.c"
 File Type = "CSource"
 Disk Date = 3724667575
 In Projects = "1,"
-Source Window State = "1,30,30,30,4,63,4,0,3,0,0,0,0,0,0,0,16,0,30,63,281,637,1,0,"
+Source Window State = "1,30,30,30,4,63,4,0,3,0,0,0,0,0,0,0,9,0,30,63,281,637,1,0,"
 Window Top = 64
 Window Left = 26
-Window Z-Order = 6
+Window Z-Order = 9
 
 [File 0012]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.h"
 File Type = "Include"
 Disk Date = 3724667575
 In Projects = "1,"
-Source Window State = "1,28,28,28,6,29,6,0,3,0,0,0,0,0,0,0,14,0,28,29,371,602,1,0,"
+Source Window State = "1,28,28,28,6,29,6,0,3,0,0,0,0,0,0,0,7,0,28,29,371,602,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 7
+Window Z-Order = 10
 
 [File 0013]
 Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/ansi/time.h"
@@ -173,7 +173,7 @@ In Projects = ""
 Source Window State = "1,67,67,67,5,5,5,0,0,0,0,0,0,0,0,0,67,0,67,5,401,665,1,0,"
 Window Top = 95
 Window Left = 42
-Window Z-Order = 16
+Window Z-Order = 17
 
 [File 0014]
 Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/rs232.h"
@@ -183,7 +183,7 @@ In Projects = ""
 Source Window State = "1,68,68,68,12,22,12,0,3,0,0,0,0,0,0,0,55,0,68,22,401,665,1,0,"
 Window Top = 126
 Window Left = 58
-Window Z-Order = 14
+Window Z-Order = 16
 
 [File 0015]
 Path = "/c/Program Files (x86)/National Instruments/Shared/CVI/Include/nidaqmx.h"
@@ -193,7 +193,7 @@ In Projects = ""
 Source Window State = "1,2700,2700,2700,18,32,18,0,3,0,0,0,0,0,0,0,2691,0,2700,32,371,630,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 5
+Window Z-Order = 8
 
 [File 0016]
 Path = "/c/Program Files (x86)/National Instruments/CVI2020/toolslib/toolbox/toolbox.h"
@@ -203,7 +203,7 @@ In Projects = ""
 Source Window State = "1,949,949,949,24,46,24,0,3,0,0,0,0,0,0,0,938,0,949,46,401,630,1,0,"
 Window Top = 33
 Window Left = 10
-Window Z-Order = 3
+Window Z-Order = 6
 
 [File 0017]
 Path Line0001 = "/c/Program Files (x86)/National Instruments/Shared/MSDTRedistributables/SDKHeade"
@@ -214,7 +214,7 @@ In Projects = ""
 Source Window State = "1,146,146,146,1,6,1,0,3,0,0,0,0,0,0,0,139,0,146,6,296,630,1,0,"
 Window Top = 64
 Window Left = 26
-Window Z-Order = 2
+Window Z-Order = 5
 
 [File 0018]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.mxb"

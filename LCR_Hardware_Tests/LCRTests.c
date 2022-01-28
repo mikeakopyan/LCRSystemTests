@@ -75,6 +75,9 @@ static int DigitalSampleRate = 5000000;
 
 const double EncoderFrequency = 150000;
 	
+static volatile BOOL AnalogThreadReady=FALSE;
+static volatile BOOL DigitalThreadReady=FALSE;
+
 //==============================================================================
 // Static functions
 int LoadDigitalData(const char *filePath);
@@ -847,6 +850,7 @@ int CVICALLBACK DataAcqAnalogThreadFunction (void *functionData)
 		MessagePopup("Analog AcqTread",text);
 		return error;
 	}
+	AnalogThreadReady = TRUE;
 	error = DAQmxReadAnalogF64(task,NumberOfAnalogSamples,10.0,
 											DAQmx_Val_GroupByChannel,
 											AnalogData,NUM_ANALOG_CHANNELS*NumberOfAnalogSamples,
@@ -882,6 +886,7 @@ int CVICALLBACK DataAcqDigitalThreadFunction (void *functionData)
 		return error;
 	}
 	error = DAQmxStartTask(task);
+	DigitalThreadReady = TRUE;
 	if (error<0) {
 		sprintf(text,"Start task error %d",error);
 		MessagePopup("Digital AcqTread",text);
@@ -1005,19 +1010,49 @@ void displayAnalogData(const double *data, int nSamples, int start, int end)
 	SetCtrlAttribute (PanelHandle, PANEL_GRAPH, ATTR_XAXIS_GAIN, xGain);
 	double xOffset = 5*start;
 	SetCtrlAttribute (PanelHandle, PANEL_GRAPH, ATTR_XAXIS_OFFSET, xOffset);
-	for (int chan=0; chan<nPlots; chan++)
+	if (end-start+1<2000)
 	{
-		int index = chan % (sizeof(colors)/sizeof(long));
-		long color = colors[index];
-		if (analogPlotHandles[chan]!=0)
-			DeleteGraphPlot(PanelHandle,PANEL_GRAPH,   analogPlotHandles[chan], VAL_IMMEDIATE_DRAW);
-		analogPlotHandles[chan] = PlotY(PanelHandle, PANEL_GRAPH,
-		  	&data[chan*nSamples+start],
-		  	end-start+1, VAL_DOUBLE,
-		  	VAL_THIN_LINE, VAL_EMPTY_SQUARE, VAL_SOLID, 1, color);
-		sprintf(plotName,"Chan %d",chan+1);
-		SetPlotAttribute (PanelHandle, PANEL_GRAPH, analogPlotHandles[chan],
-						  ATTR_PLOT_LG_TEXT, plotName);	
+		for (int chan=0; chan<nPlots; chan++)
+		{
+			int index = chan % (sizeof(colors)/sizeof(long));
+			long color = colors[index];
+			if (analogPlotHandles[chan]!=0)
+				DeleteGraphPlot(PanelHandle,PANEL_GRAPH,   analogPlotHandles[chan], VAL_IMMEDIATE_DRAW);
+			analogPlotHandles[chan] = PlotY(PanelHandle, PANEL_GRAPH,
+			  	&data[chan*nSamples+start],
+			  	end-start+1, VAL_DOUBLE,
+			  	VAL_THIN_LINE, VAL_EMPTY_SQUARE, VAL_SOLID, 1, color);
+			sprintf(plotName,"Chan %d",chan+1);
+			SetPlotAttribute (PanelHandle, PANEL_GRAPH, analogPlotHandles[chan],
+							  ATTR_PLOT_LG_TEXT, plotName);	
+		}
+	}
+	else
+	{
+		int skip = (end-start+1)/1000;
+		int nSubsample = (end-start+1)/skip;
+		double ySubsample[2000];
+		double xSubsample[2000];
+		for (int chan=0; chan<nPlots; chan++)
+		{
+			int index = chan % (sizeof(colors)/sizeof(long));
+			long color = colors[index];
+			if (analogPlotHandles[chan]!=0)
+				DeleteGraphPlot(PanelHandle,PANEL_GRAPH,   analogPlotHandles[chan], VAL_IMMEDIATE_DRAW);
+			int indx = 0;
+			for (int i=start; i<end; i+=skip, indx++) {
+				xSubsample[indx] = i;
+				ySubsample[indx] = data[chan*nSamples+i];
+			}
+			nSubsample = indx;
+			analogPlotHandles[chan] = PlotXY(PanelHandle, PANEL_GRAPH,
+			  	xSubsample,ySubsample,
+			  	nSubsample, VAL_DOUBLE,VAL_DOUBLE,
+			  	VAL_THIN_LINE, VAL_EMPTY_SQUARE, VAL_SOLID, 1, color);
+			sprintf(plotName,"Chan %d",chan+1);
+			SetPlotAttribute (PanelHandle, PANEL_GRAPH, analogPlotHandles[chan],
+							  ATTR_PLOT_LG_TEXT, plotName);	
+		}
 	}
 }
 
@@ -1049,23 +1084,75 @@ void displayDigitalData(const uint32_t *data, int start, int end)
 	//SetCtrlAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, ATTR_ENABLE_ZOOM_AND_PAN, 1);
 	//SetCtrlAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, ATTR_ZOOM_STYLE, VAL_ZOOM_TO_RECT); 
 	digitalPortBits = malloc(size*sizeof(int));
-	for (int i=0; i<sizeof(digitalBits)/sizeof(int); i++)
+	if (end-start+1<2000)
 	{
-		if (digitalPlotHandles[i]!=0)
-			DeleteGraphPlot(PanelHandle,PANEL_GRAPH_DIGITAL,   digitalPlotHandles[i], VAL_IMMEDIATE_DRAW);
-		int index = i % (sizeof(colors)/sizeof(long));
-		long color = colors[index];
-		for (int j=0; j<size; j++) {
-			uint32_t d = data[j+start];
-			int b = (d&bit[i])!=0 ? 1: 0;
-			digitalPortBits[j] = b + (nPlots-1-i) * 3;
+		for (int i=0; i<sizeof(digitalBits)/sizeof(int); i++)
+		{
+			if (digitalPlotHandles[i]!=0)
+				DeleteGraphPlot(PanelHandle,PANEL_GRAPH_DIGITAL,   digitalPlotHandles[i], VAL_IMMEDIATE_DRAW);
+			int index = i % (sizeof(colors)/sizeof(long));
+			long color = colors[index];
+			for (int j=0; j<size; j++) {
+				uint32_t d = data[j+start];
+				int b = (d&bit[i])!=0 ? 1: 0;
+				digitalPortBits[j] = b + (nPlots-1-i) * 3;
+			}
+			digitalPlotHandles[i] = PlotY(PanelHandle, PANEL_GRAPH_DIGITAL, &digitalPortBits[0],
+				size,
+				VAL_INTEGER, VAL_THIN_LINE, VAL_EMPTY_SQUARE,
+				VAL_SOLID, 1, color);
+			SetPlotAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, digitalPlotHandles[i],
+							  ATTR_PLOT_LG_TEXT, legend[i]);
 		}
-		digitalPlotHandles[i] = PlotY(PanelHandle, PANEL_GRAPH_DIGITAL, &digitalPortBits[0],
-			size,
-			VAL_INTEGER, VAL_THIN_LINE, VAL_EMPTY_SQUARE,
-			VAL_SOLID, 1, color);
-		SetPlotAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, digitalPlotHandles[i],
-						  ATTR_PLOT_LG_TEXT, legend[i]);
+	}
+	else
+	{
+		int skip = (end-start+1)/1000;
+		int nSubsample = (end-start+1)/skip;
+		int ySubsample[2000];
+		int xSubsample[2000];
+		for (int i=0; i<sizeof(digitalBits)/sizeof(int); i++)
+		{
+			if (digitalPlotHandles[i]!=0)
+				DeleteGraphPlot(PanelHandle,PANEL_GRAPH_DIGITAL,   digitalPlotHandles[i], VAL_IMMEDIATE_DRAW);
+			int index = i % (sizeof(colors)/sizeof(long));
+			long color = colors[index];
+			for (int j=0; j<size; j++) {
+				uint32_t d = data[j+start];
+				int b = (d&bit[i])!=0 ? 1: 0;
+				digitalPortBits[j] = b + (nPlots-1-i) * 3;
+			}
+			int indx = 0;
+			for (int j=start; j<end; j+=skip, indx++) {
+				int v1 = digitalPortBits[j];
+				int v2 = v1;
+				for (int k=0; k<skip-1; k++) {
+					if (j+k+1>end)
+						break;
+					if (digitalPortBits[j+k] != digitalPortBits[j+k+1])
+					{
+						v1 = digitalPortBits[j+k];
+						v2 = digitalPortBits[j+k+1];
+						break;
+					}
+				}
+				xSubsample[indx] = j;
+				ySubsample[indx] = v1;
+				if (v1!=v2) {
+					xSubsample[++indx] = j;
+					ySubsample[  indx] = v2;
+				}
+			}
+			nSubsample = indx;
+			digitalPlotHandles[i] = PlotXY(PanelHandle, PANEL_GRAPH_DIGITAL,
+				xSubsample,ySubsample,
+				nSubsample,
+				VAL_INTEGER,VAL_INTEGER,
+				VAL_THIN_LINE, VAL_EMPTY_SQUARE,
+				VAL_SOLID, 1, color);
+			SetPlotAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, digitalPlotHandles[i],
+							  ATTR_PLOT_LG_TEXT, legend[i]);
+		}
 	}
 	free(digitalPortBits);
 }
@@ -1186,20 +1273,93 @@ int MoveFiles(const char *vflrFile, int nTrajectories)
 	return 0;
 }
 
+// Calculate largest encoder counts for all trajectories in the file
+int calculateLargestEncoderCounts(const char *filePath)
+{
+    //const uInt8 laserBit = 0b00000001;
+    const uInt8 powerBit = 0b00000010;
+    const uInt8 pwmDutyBit = 0b00000100;
+    const uInt8 pwmPeridBit = 0b00001000;
+    //const uInt8 SOTBit = 0b00010000;
+    const uInt8 EOTBit = 0b00100000;
+	uInt8 buffer[4];
+	uInt8 dummy[3];
+	int encoder;
+	int maxEncoder = 0;
+	int nb;
+	uInt8 format,nLasers;
+	uInt32 offsetAndSize[42];
+	FILE *f = fopen(filePath,"rb");
+	if (f==NULL)
+		return -1;
+	fseek(f,2000,SEEK_SET);	// Skip text header
+	fread(&format,1,1,f);
+	fread(&nLasers,1,1,f);
+	fread(offsetAndSize,4,2*(size_t)nLasers,f);
+	for (int laser=0; laser<nLasers; laser++)
+	{
+		fseek(f,offsetAndSize[2*laser],SEEK_SET);
+		int nRead = 0;
+		while (nRead<offsetAndSize[2*laser+1]) {
+			 if (fread(buffer,1,4,f)!=4) {
+				 fclose(f);
+				 return -3;
+			 }
+			 nRead += 4;
+			 nb=0;
+			 if ((buffer[0]&powerBit)!=0)
+				 nb++;
+			 if ((buffer[0]&pwmDutyBit)!=0)
+				 nb++;
+			 if ((buffer[0]&pwmPeridBit)!=0)
+				 nb++;
+			 if (nb!=0) {
+				 if (fread(dummy,1,nb,f)!=nb) {
+				 	fclose(f);
+					return -2;
+				 }
+			 }
+			 nRead += nb;
+			 encoder = (((uInt32)buffer[3])<<16)
+			   + (((uInt32)buffer[2])<<8)
+			   + ((uInt32)buffer[1]);
+			 if ((buffer[0]&EOTBit)!=0) {
+				 if (encoder>maxEncoder)
+					 maxEncoder = encoder;
+			 }			 
+		}
+	}
+	fclose(f);
+	return maxEncoder;
+}
+
 int loadAndRunVFLR(char *filePath, int nTrajectories)
 {
+	int waitCounter = 0;
 	int opcStatus;
 	int displayStart = 0;
 	int displayEnd = 0;
 	int analogThreadID = 0;
 	int digitalThreadID = 0;
 	int digitalToAnalogRateRatio = 5;
-	NumberOfAnalogSamples = 2000000;
-	NumberOfDigitalSamples = digitalToAnalogRateRatio*NumberOfAnalogSamples;
+	int maxEncoderCounts = 0;
+
 	AnalogSampleRate = 1E6;
+	float64 encoderFreq = 4.0 * 150E3;
 	displayStart = 0;
-	displayEnd = NumberOfAnalogSamples/50-1;
+
 	DeleteFile("c:/Temp/vflrFileName.txt");
+
+	maxEncoderCounts = calculateLargestEncoderCounts(filePath);
+	if (maxEncoderCounts<0) {
+		MessagePopup("Cannot open file",filePath);
+		return 2;
+	}
+	// Analog 
+	NumberOfAnalogSamples = AnalogSampleRate*maxEncoderCounts/encoderFreq;
+	NumberOfAnalogSamples += 0.3 * AnalogSampleRate;
+	NumberOfDigitalSamples = digitalToAnalogRateRatio*NumberOfAnalogSamples;
+	displayEnd = NumberOfAnalogSamples;
 	enableZoom(TRUE);
 	WriteLog("Sending file\n",TRUE);
 #ifdef USE_LCR
@@ -1235,8 +1395,10 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 		char digitalFileName[MAX_PATH];
 		sprintf(analogFileName,"C:/Temp/AnalogData%d.dat",trajectory);
 		sprintf(digitalFileName,"C:/Temp/PortData%d.dat",trajectory);
+		AnalogThreadReady = FALSE;
 		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
 		DataAcqAnalogThreadFunction, NULL, &analogThreadID);
+		DigitalThreadReady = FALSE;
 		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
 		DataAcqDigitalThreadFunction, NULL, &digitalThreadID);
 
@@ -1250,8 +1412,18 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 			WriteLog("Pulse generator enable retry to set to 0\n",TRUE);
 		}
 #endif
-		Delay(0.8);
+		//Delay(0.8);
 #ifdef USE_PLC
+		waitCounter = 0;
+		while (AnalogThreadReady==FALSE || DigitalThreadReady==FALSE) {
+			Delay(0.1);
+			waitCounter++;
+			if (waitCounter>50) {	// We cannnot start thread in 5 secs
+				MessagePopup("Error","Cannot start thread(s). Please restart the app");
+				return 0;
+			}
+		}
+
 		for (int k = 0; k < 5; k++)
 		{
 			opcStatus = OPC_SetCounterReset(0);
@@ -1268,11 +1440,10 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, 0);
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, 0);
 		clearGraphs();
-		displayAnalogData(AnalogData,NumberOfAnalogSamples,displayStart,displayEnd);
+		displayAnalogData(AnalogData,NumberOfAnalogSamples,0,NumberOfAnalogSamples-1);
 		SaveAnalogDataAsync(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
 		AnalogData = NULL;
-		displayDigitalData(DigitalPortData, digitalToAnalogRateRatio*displayStart,
-		 				   digitalToAnalogRateRatio*(displayEnd+1)-1);
+		displayDigitalData(DigitalPortData, 0, NumberOfDigitalSamples-1);
 		SaveDigitalPortDataAsync(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
 		DigitalPortData = NULL;
 #ifdef USE_PLC
