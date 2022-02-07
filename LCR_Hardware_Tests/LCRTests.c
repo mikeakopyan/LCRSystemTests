@@ -2174,6 +2174,7 @@ int createFolders(void)
 	strToPort("mkdir CurrentBuild\r",0.1);
 	strToPort("mkdir CurrentBuild/LaserControlFiles\r",0.1);
 	strToPort("mkdir MachineParameters\r",0.1);
+	strToPort("mkdir Logs\r",0.1);
 	strToPort("mkdir packet_tests\r",0.1);
 	strToPort("mkdir script_tests\r",0.1);
 	strToPort("mkdir script_tests/script_outputs\r",0.5);
