@@ -232,8 +232,9 @@ Error:
 void enableButtons(int panel, int enable)
 {
 	int buttonsIDs[] = {PANEL_QUITBUTTON,PANEL_ACQUIRE,PANEL_RUNALLTESTS, PANEL_ZOOM_POSITION,
-					   PANEL_RAMPUP,PANEL_OVERSHOOT,PANEL_PWM,PANEL_CROSSTALK,PANEL_ACCURACY,
-					   PANEL_INIT_HARDWARE};
+					   PANEL_RAMPUP,PANEL_OVERSHOOT,PANEL_PWM,PANEL_CROSSTALK,PANEL_PINTEST,
+					   PANEL_ACCURACY, PANEL_INIT_HARDWARE,
+					   PANEL_ZOOM_POSITION, PANEL_ZOOM_START, PANEL_ZOOM_LENGTH};
 	for (int i=0; i<sizeof(buttonsIDs)/sizeof(int); i++) {
 			SetCtrlAttribute(panel,buttonsIDs[i],ATTR_DIMMED, 1-enable);
 	}
@@ -644,6 +645,13 @@ int saveDigitalDataPoolTail = 0;
 int saveDigitalDataPoolSize = 0;
 struct saveDigitalDataElem saveDigitalDataPool[POOL_SIZE];
 
+int CVICALLBACK DataAcqAnalogThreadFunction (void *functionData);
+static float64 *AnalogData = 0;
+static float64 *AnalogDataTmp = 0;
+
+int CVICALLBACK DataAcqDigitalThreadFunction (void *functionData);
+static uint32_t *DigitalPortData = 0;
+static uint32_t *DigitalPortDataTmp = 0;
 
 void InitLocks(void)
 {
@@ -683,7 +691,9 @@ int CVICALLBACK SaveAnalogDataThread (void *functionData)
 		if (keepRunning) {
 			SaveAnalogData(poolElem.name, poolElem.data, poolElem.size,
 							   poolElem.numChanels,poolElem.samplingRate);
-			free(poolElem.data);
+			if (AnalogDataTmp!=0)
+				free(AnalogDataTmp);
+			AnalogDataTmp = poolElem.data;
 		}
 	}
 	return 0;
@@ -755,7 +765,9 @@ int CVICALLBACK SaveDigitalDataThread (void *functionData)
 		CmtReleaseLock (saveDigitalDataPoolLock);
 		if (keepRunning) {
 			SaveDigitalPortData(poolElem.name, poolElem.data, poolElem.size, poolElem.samplingRate);
-			free(poolElem.data);
+			if (DigitalPortDataTmp!=0)
+				free(DigitalPortDataTmp);
+			DigitalPortDataTmp = poolElem.data;
 		}
 	}
 	return 0;
@@ -819,12 +831,6 @@ int CVICALLBACK LoadAndRunThreadFunction (void *functionData)
 	running = FALSE;
 	return 0;
 }
-
-int CVICALLBACK DataAcqAnalogThreadFunction (void *functionData);
-static float64 *AnalogData = 0;
-
-int CVICALLBACK DataAcqDigitalThreadFunction (void *functionData);
-static uint32_t *DigitalPortData = 0;
 
 int CVICALLBACK DataAcqAnalogThreadFunction (void *functionData)
 {
@@ -998,20 +1004,13 @@ void displayAnalogData(const double *data, int nSamples, int start, int end)
 						VAL_LT_GRAY, VAL_DK_GRAY, VAL_WHITE}; // VAL_BLACK
 
 	char plotName[100];
-	static BOOL first = TRUE;
 	int nPlots = NUM_ANALOG_CHANNELS;
-	if (first)
-	{
-		first = FALSE;
-		for (int i=0; i<MAX_NUM_DISPLAY_CHANNELS; i++)
-			analogPlotHandles[i] = 0;
-	}
 	double xGain = 1E6/AnalogSampleRate;
 	SetCtrlAttribute (PanelHandle, PANEL_GRAPH, ATTR_XAXIS_GAIN, xGain);
-	double xOffset = 5*start;
-	SetCtrlAttribute (PanelHandle, PANEL_GRAPH, ATTR_XAXIS_OFFSET, xOffset);
 	if (end-start+1<2000)
 	{
+		double xOffset = start;
+		SetCtrlAttribute (PanelHandle, PANEL_GRAPH, ATTR_XAXIS_OFFSET, xOffset);
 		for (int chan=0; chan<nPlots; chan++)
 		{
 			int index = chan % (sizeof(colors)/sizeof(long));
@@ -1029,6 +1028,8 @@ void displayAnalogData(const double *data, int nSamples, int start, int end)
 	}
 	else
 	{
+		double xOffset = 0.0;
+		SetCtrlAttribute (PanelHandle, PANEL_GRAPH, ATTR_XAXIS_OFFSET, xOffset);
 		int skip = (end-start+1)/1000;
 		int nSubsample = (end-start+1)/skip;
 		double ySubsample[2000];
@@ -1041,10 +1042,14 @@ void displayAnalogData(const double *data, int nSamples, int start, int end)
 				DeleteGraphPlot(PanelHandle,PANEL_GRAPH,   analogPlotHandles[chan], VAL_IMMEDIATE_DRAW);
 			int indx = 0;
 			for (int i=start; i<end; i+=skip, indx++) {
+				if (chan*nSamples+i>=21*nSamples)
+					break;
 				xSubsample[indx] = i;
 				ySubsample[indx] = data[chan*nSamples+i];
 			}
 			nSubsample = indx;
+			if (nSubsample==0)
+				continue;
 			analogPlotHandles[chan] = PlotXY(PanelHandle, PANEL_GRAPH,
 			  	xSubsample,ySubsample,
 			  	nSubsample, VAL_DOUBLE,VAL_DOUBLE,
@@ -1064,7 +1069,7 @@ void enableZoom(BOOL enable)
 	}
 }
 
-void displayDigitalData(const uint32_t *data, int start, int end)
+void displayDigitalData(const uint32_t *data, int nSamples, int start, int end)
 {
 	const int digitalBits[] = {30,29,0,1};
 	const char *legend[] = {"Encoder A","Encoder B","Laser 1","Laser 2"};
@@ -1076,16 +1081,15 @@ void displayDigitalData(const uint32_t *data, int start, int end)
 						VAL_LT_GRAY, VAL_DK_GRAY, VAL_WHITE}; // VAL_BLACK
 	int *digitalPortBits;
 	int size = end - start + 1;
-	double xOffset = start;
-	
 	for (int i=0; i<sizeof(digitalBits)/sizeof(int); i++)
 		bit[i] = 1<<digitalBits[i];
-	SetCtrlAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, ATTR_XAXIS_OFFSET, xOffset);
-	//SetCtrlAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, ATTR_ENABLE_ZOOM_AND_PAN, 1);
-	//SetCtrlAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, ATTR_ZOOM_STYLE, VAL_ZOOM_TO_RECT); 
 	digitalPortBits = malloc(size*sizeof(int));
+	double xGain = 1E6/DigitalSampleRate;
+	SetCtrlAttribute (PanelHandle, PANEL_GRAPH, ATTR_XAXIS_GAIN, xGain);
 	if (end-start+1<2000)
 	{
+		double xOffset = start;
+		SetCtrlAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, ATTR_XAXIS_OFFSET, xOffset);
 		for (int i=0; i<sizeof(digitalBits)/sizeof(int); i++)
 		{
 			if (digitalPlotHandles[i]!=0)
@@ -1093,9 +1097,14 @@ void displayDigitalData(const uint32_t *data, int start, int end)
 			int index = i % (sizeof(colors)/sizeof(long));
 			long color = colors[index];
 			for (int j=0; j<size; j++) {
-				uint32_t d = data[j+start];
-				int b = (d&bit[i])!=0 ? 1: 0;
-				digitalPortBits[j] = b + (nPlots-1-i) * 3;
+				if (j<nSamples)
+				{
+					uint32_t d = data[j+start];
+					int b = (d&bit[i])!=0 ? 1: 0;
+					digitalPortBits[j] = b + (nPlots-1-i) * 3;
+				}
+				else
+					digitalPortBits[j] = 0;
 			}
 			digitalPlotHandles[i] = PlotY(PanelHandle, PANEL_GRAPH_DIGITAL, &digitalPortBits[0],
 				size,
@@ -1107,6 +1116,8 @@ void displayDigitalData(const uint32_t *data, int start, int end)
 	}
 	else
 	{
+		double xOffset = 0.0;
+		SetCtrlAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, ATTR_XAXIS_OFFSET, xOffset);
 		int skip = (end-start+1)/1000;
 		int nSubsample = (end-start+1)/skip;
 		int ySubsample[2000];
@@ -1118,12 +1129,19 @@ void displayDigitalData(const uint32_t *data, int start, int end)
 			int index = i % (sizeof(colors)/sizeof(long));
 			long color = colors[index];
 			for (int j=0; j<size; j++) {
+				if (j+start<nSamples)
+				{
 				uint32_t d = data[j+start];
 				int b = (d&bit[i])!=0 ? 1: 0;
 				digitalPortBits[j] = b + (nPlots-1-i) * 3;
+				}
+				else
+					digitalPortBits[j] = 0;
 			}
 			int indx = 0;
-			for (int j=start; j<end; j+=skip, indx++) {
+			for (int j=0; j<size; j+=skip, indx++) {
+				if (j+skip>=size)
+					break;
 				int v1 = digitalPortBits[j];
 				int v2 = v1;
 				for (int k=0; k<skip-1; k++) {
@@ -1136,22 +1154,25 @@ void displayDigitalData(const uint32_t *data, int start, int end)
 						break;
 					}
 				}
-				xSubsample[indx] = j;
+				xSubsample[indx] = j + start;
 				ySubsample[indx] = v1;
 				if (v1!=v2) {
-					xSubsample[++indx] = j;
+					xSubsample[++indx] = j + start;
 					ySubsample[  indx] = v2;
 				}
 			}
 			nSubsample = indx;
-			digitalPlotHandles[i] = PlotXY(PanelHandle, PANEL_GRAPH_DIGITAL,
-				xSubsample,ySubsample,
-				nSubsample,
-				VAL_INTEGER,VAL_INTEGER,
-				VAL_THIN_LINE, VAL_EMPTY_SQUARE,
-				VAL_SOLID, 1, color);
-			SetPlotAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, digitalPlotHandles[i],
-							  ATTR_PLOT_LG_TEXT, legend[i]);
+			if (nSubsample!=0)
+			{
+				digitalPlotHandles[i] = PlotXY(PanelHandle, PANEL_GRAPH_DIGITAL,
+					xSubsample,ySubsample,
+					nSubsample,
+					VAL_INTEGER,VAL_INTEGER,
+					VAL_THIN_LINE, VAL_EMPTY_SQUARE,
+					VAL_SOLID, 1, color);
+				SetPlotAttribute (PanelHandle, PANEL_GRAPH_DIGITAL, digitalPlotHandles[i],
+								  ATTR_PLOT_LG_TEXT, legend[i]);
+			}
 		}
 	}
 	free(digitalPortBits);
@@ -1360,7 +1381,6 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 	NumberOfAnalogSamples += 0.3 * AnalogSampleRate;
 	NumberOfDigitalSamples = digitalToAnalogRateRatio*NumberOfAnalogSamples;
 	displayEnd = NumberOfAnalogSamples;
-	enableZoom(TRUE);
 	WriteLog("Sending file\n",TRUE);
 #ifdef USE_LCR
 	int ftpError = sendFileToLCR(filePath);
@@ -1443,7 +1463,7 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 		displayAnalogData(AnalogData,NumberOfAnalogSamples,0,NumberOfAnalogSamples-1);
 		SaveAnalogDataAsync(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
 		AnalogData = NULL;
-		displayDigitalData(DigitalPortData, 0, NumberOfDigitalSamples-1);
+		displayDigitalData(DigitalPortData, NumberOfDigitalSamples, 0, NumberOfDigitalSamples-1);
 		SaveDigitalPortDataAsync(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
 		DigitalPortData = NULL;
 #ifdef USE_PLC
@@ -1459,18 +1479,28 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 
 	}
 	if (running) {
+		while (saveAnalogDataInProgress || saveDigitalDataInProgress)
+		{
+			WriteLog("Waiting for saving to complete\n",FALSE);
+			Delay(1.0);
+		}
 		WriteLog("Moving data files\n",TRUE);
 		MoveFiles(filePath, nTrajectories);
 		WriteLog("Test completed\n",TRUE);
 		FILE *f = fopen("c:/Temp/vflrFileName.txt","w");
 		fprintf(f,"%s",filePath);
 		fclose(f);
+		AnalogData = AnalogDataTmp;
+		AnalogDataTmp = 0;
+		DigitalPortData = DigitalPortDataTmp;
+		DigitalPortDataTmp = 0;
 	}
 	else
 		WriteLog("Test cancelled\n",TRUE);
 #ifdef USE_PLC	
 	OPC_SetOpenLayer(0);
 #endif
+	enableZoom(TRUE);
 	return 0;
 }
 
@@ -1582,10 +1612,10 @@ int CVICALLBACK ZoomPosition (int panel, int control, int event,
 				//char txt[60];
 				//sprintf(txt,"%d\n",start);
 				//WriteLog(txt);
-				displayDigitalData(DigitalPortData,start,start+displaySize-1);
+				displayDigitalData(DigitalPortData,NumberOfDigitalSamples,5*start,5*(start+displaySize)-1);
 			}
 			if (AnalogData!=0) {
-				displayAnalogData(AnalogData,NumberOfAnalogSamples,start/5,(start+displaySize)/5-1);			
+				displayAnalogData(AnalogData,NumberOfAnalogSamples,start,(start+displaySize)-1);
 			}
 			break;
 	}
@@ -1612,10 +1642,10 @@ int ExecuteTest(void)
 	double  *xResult = 0;
 	int 	nPointsToUse[NUM_ANALOG_CHANNELS] = {NUM_ANALOG_CHANNELS*0};
 	int		fitStart[NUM_ANALOG_CHANNELS] = {NUM_ANALOG_CHANNELS*0};
-	long		colors[] = {VAL_RED, VAL_GREEN, VAL_BLUE, VAL_CYAN,
-						VAL_MAGENTA, VAL_YELLOW, VAL_DK_RED, VAL_DK_BLUE,
-						VAL_DK_GREEN,VAL_DK_CYAN,VAL_DK_MAGENTA, VAL_DK_YELLOW,
-						VAL_LT_GRAY, VAL_DK_GRAY, VAL_WHITE}; // VAL_BLACK
+	//long		colors[] = {VAL_RED, VAL_GREEN, VAL_BLUE, VAL_CYAN,
+	//					VAL_MAGENTA, VAL_YELLOW, VAL_DK_RED, VAL_DK_BLUE,
+	//					VAL_DK_GREEN,VAL_DK_CYAN,VAL_DK_MAGENTA, VAL_DK_YELLOW,
+	//					VAL_LT_GRAY, VAL_DK_GRAY, VAL_WHITE}; // VAL_BLACK
 	char 	txtResults[2000];
 	char    txtOneResult[100];
 	BOOL fitLine = FALSE;
@@ -1624,17 +1654,20 @@ int ExecuteTest(void)
 	char errorMsg[100];
 	strcpy(errorMsg,"");
 	enableZoom(FALSE);
-	if (useAnalogTask) {
-		if (AnalogData!=NULL)
+	if (AnalogData!=NULL)
 			free(AnalogData);
+	AnalogData = NULL;
+	if (DigitalPortData!=NULL)
+		free(DigitalPortData);
+	DigitalPortData = NULL;
+	if (useAnalogTask) {
 		AnalogData = malloc(NUM_ANALOG_CHANNELS*NumberOfAnalogSamples*sizeof(float64));
 		memset(AnalogData,0,NUM_ANALOG_CHANNELS*NumberOfAnalogSamples*sizeof(float64));
 		WriteLog("Start Analog acq thread\n",TRUE);
 		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
 									   DataAcqAnalogThreadFunction, NULL, &analogThreadID);
 		if (readDigitalPort) {
-			if (DigitalPortData!=NULL)
-				free(DigitalPortData);
+
 			DigitalPortData = malloc(NumberOfDigitalSamples*sizeof(uint32_t));
 			memset(DigitalPortData,0xAA,NumberOfDigitalSamples*sizeof(uint32_t));
 			WriteLog("Start Digital acq thread\n",TRUE);
@@ -1644,8 +1677,6 @@ int ExecuteTest(void)
 	}
 	if (useDigitalTask) {
 		NumberOfDigitalSamples = 1000000;
-		if (DigitalPortData!=NULL)
-			free(DigitalPortData);
 		DigitalPortData = malloc(NumberOfDigitalSamples*sizeof(uint32_t));
 		memset(DigitalPortData,0xAA,NumberOfDigitalSamples*sizeof(uint32_t));
 		WriteLog("Start Digital acq thread\n",TRUE);
@@ -1673,15 +1704,15 @@ int ExecuteTest(void)
 
 	if (useAnalogTask) {
 		double timeScale = (double)AnalogSampleRate/(4*EncoderFrequency);
-		const char *analogFileName = "C:/Temp/AnalogData.csv";
-		const char *digitalFileName = "C:/Temp/PortData.csv";
+		//const char *analogFileName = "C:/Temp/AnalogData.csv";
+		//const char *digitalFileName = "C:/Temp/PortData.csv";
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, analogThreadID, OPT_TP_PROCESS_EVENTS_WHILE_WAITING );
-		WriteLog("Saving analog data\n",TRUE);
-		SaveAnalogDataTxt(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
+		//WriteLog("Saving analog data\n",TRUE);
+		//SaveAnalogDataTxt(analogFileName,AnalogData,NumberOfAnalogSamples,NUM_ANALOG_CHANNELS,AnalogSampleRate);
 		if (readDigitalPort) {
 			CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, OPT_TP_PROCESS_EVENTS_WHILE_WAITING );
-			WriteLog("Saving digital data\n",TRUE);
-			SaveDigitalPortDataTxt(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
+			//WriteLog("Saving digital data\n",TRUE);
+			//SaveDigitalPortDataTxt(digitalFileName,DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
 		}
 		strcpy(txtResults,"");
 
@@ -1696,8 +1727,8 @@ int ExecuteTest(void)
 				nPointsToUse[i] = timeScale * (2550 - 400);
 			}
 		}
+		displayAnalogData(AnalogData,NumberOfAnalogSamples,DisplayStart,DisplayEnd);
 		for (int chan=0; chan<NUM_ANALOG_CHANNELS_TO_CHECK; chan++) {
-			char plotName[20];
 			if (fitLine) {
 				lineFit(&time[fitStart[chan]],
 						&AnalogData[chan*NumberOfAnalogSamples+fitStart[chan]],
@@ -1716,17 +1747,6 @@ int ExecuteTest(void)
 					}
 				}
 			}
-			int index = chan % (sizeof(colors)/sizeof(long));
-			long color = colors[index];
-			if (analogPlotHandles[chan]!=0)
-				DeleteGraphPlot(PanelHandle,PANEL_GRAPH,   analogPlotHandles[chan], VAL_IMMEDIATE_DRAW);
-			analogPlotHandles[chan] = PlotY(PanelHandle, PANEL_GRAPH,
-				  	&AnalogData[chan*NumberOfAnalogSamples+DisplayStart],
-				  	DisplayEnd-DisplayStart+1, VAL_DOUBLE,
-				  	VAL_THIN_LINE, VAL_EMPTY_SQUARE, VAL_SOLID, 1, color);
-			sprintf(plotName,"Chan %d",chan+1);
-			SetPlotAttribute (PanelHandle, PANEL_GRAPH, analogPlotHandles[chan],
-					  ATTR_PLOT_LG_TEXT, plotName);
 			if (testID == PANEL_CROSSTALK) {
 				BOOL pass;
 				float64 minVal;
@@ -1770,12 +1790,6 @@ int ExecuteTest(void)
 				}
 				strcat(txtResults,txtOneResult);
 			}
-		    //if (fitLine) {
-			//	PlotXY(PanelHandle, PANEL_GRAPH,xResult,fitResult,
-			//		   nPointsToUse[chan], VAL_DOUBLE, VAL_DOUBLE,
-			//		   VAL_THIN_LINE, VAL_EMPTY_SQUARE,
-			//		   VAL_SOLID, 1, VAL_YELLOW);
-			//}
 		}
 		if (readDigitalPort) {
 			PlotY(PanelHandle, PANEL_GRAPH_DIGITAL, &DigitalPortData[0],
@@ -1787,8 +1801,8 @@ int ExecuteTest(void)
 	}
 	if (useDigitalTask) {
 		CmtWaitForThreadPoolFunctionCompletion (DEFAULT_THREAD_POOL_HANDLE, digitalThreadID, OPT_TP_PROCESS_EVENTS_WHILE_WAITING );
-		WriteLog("Saving digital port data\n",TRUE);
-		SaveDigitalPortData("C:/Temp/PortData.csv",DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
+		//WriteLog("Saving digital port data\n",TRUE);
+		//SaveDigitalPortData("C:/Temp/PortData.csv",DigitalPortData,NumberOfDigitalSamples,DigitalSampleRate);
 		strcpy(txtResults,"");
 		if (testID == PANEL_PWM) {
 			for (int chan=0; chan<NUM_DIGITAL_CHANNELS_TO_CHECK; chan++) {
@@ -1799,8 +1813,6 @@ int ExecuteTest(void)
 											NumberOfDigitalSamples,
 											chan,
 											&maxTimeDeviation);
-				//if (error==0)
-				//	sprintf(txtOneResult,"%.1f usec\n",maxTimeDeviation);
 				if (error!=0) {
 					sprintf(txtOneResult,"%.1f usec - FAIL CODE: %d\n",maxTimeDeviation,error);
 					testResult = 1;
@@ -1810,14 +1822,7 @@ int ExecuteTest(void)
 		}
 		if (strlen(txtResults)>0)
 			WriteLog(txtResults,TRUE);
-		//for (int i=0; i<1; i++) {
-		//	if (digitalPlotHandles[i]!=0)
-		//		DeleteGraphPlot(PanelHandle,PANEL_GRAPH_DIGITAL, digitalPlotHandles[i], VAL_IMMEDIATE_DRAW);
-		//	digitalPlotHandles[i] = PlotY(PanelHandle, PANEL_GRAPH_DIGITAL, &DigitalPortData[0],
-		//		   NUMBER_OF_DIGITAL_SAMPLES, VAL_INTEGER, VAL_THIN_LINE, VAL_EMPTY_SQUARE,
-		//		   VAL_SOLID, 1, VAL_RED);
-		//}
-		displayDigitalData(DigitalPortData,0,5*(DisplayEnd+1)-1);
+		displayDigitalData(DigitalPortData,NumberOfDigitalSamples,0,5*(DisplayEnd+1)-1);
 	}
 	free(time);
 	free(fitResult);
@@ -1892,7 +1897,7 @@ int PwmTest(void)
 {
 	testID = PANEL_PWM;
 	DisplayStart = 0;
-	DisplayEnd = 2000-1;
+	DisplayEnd = 1000000/5-1;
 	clearGraphs();
 	WriteLog("Start PWM test\n",TRUE);
 	WriteLog("Sending file\n",TRUE);
