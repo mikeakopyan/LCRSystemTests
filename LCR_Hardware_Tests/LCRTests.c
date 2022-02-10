@@ -1421,7 +1421,6 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 		DigitalThreadReady = FALSE;
 		CmtScheduleThreadPoolFunction (DEFAULT_THREAD_POOL_HANDLE,
 		DataAcqDigitalThreadFunction, NULL, &digitalThreadID);
-
 #ifdef USE_PLC
 		for (int k = 0; k < 5; k++)
 		{
@@ -1495,8 +1494,12 @@ int loadAndRunVFLR(char *filePath, int nTrajectories)
 		DigitalPortData = DigitalPortDataTmp;
 		DigitalPortDataTmp = 0;
 	}
-	else
+	else {
+		OPC_SetAbortLayer(1);
+		Delay(1.0);
+		OPC_SetAbortLayer(0);
 		WriteLog("Test cancelled\n",TRUE);
+	}
 #ifdef USE_PLC	
 	OPC_SetOpenLayer(0);
 #endif
@@ -1957,6 +1960,9 @@ int CVICALLBACK RunTest (int panel, int control, int event,
 	switch (event)
 	{
 		case EVENT_COMMIT:
+		OPC_SetSelectedBuildLayout(0);
+    	OPC_SetSelectedPrintNumber(0);
+    	OPC_SetSelectedLayer(1);
 		enableAllControns(panel,FALSE);
 		GetCtrlVal(panel, PANEL_RAMPUP, &radioButtonValue);		
 		if (radioButtonValue==1) {

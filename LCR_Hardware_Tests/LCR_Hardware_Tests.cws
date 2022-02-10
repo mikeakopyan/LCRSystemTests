@@ -13,10 +13,10 @@ Number of Projects = 1
 Active Project = 1
 Project 0001 = "LCR_Hardware_Tests.prj"
 Drag Bar Left = 238
-Window Top = 70
-Window Left = 152
-Window Bottom = 950
-Window Right = 1832
+Window Top = 723
+Window Left = 8
+Window Bottom = 1603
+Window Right = 1688
 Maximized = False
 Maximized Children = True
 Max32 Number Of Errors = 20
@@ -30,7 +30,7 @@ Save Changes Before Compiling = "Always"
 Hide Windows = False
 Break At First Statement = False
 Sort Type = "File Name"
-Number of Opened Files = 5
+Number of Opened Files = 6
 Window Confinement Region Enabled = True
 MainColumnWidth = 221
 FileDateColumnWidth = 70
@@ -64,19 +64,48 @@ In Projects = "1,"
 Source Window State = "1,32,32,32,4,17,4,0,3,0,0,0,0,0,0,0,17,0,32,17,281,637,1,0,"
 Window Top = 95
 Window Left = 42
-Window Z-Order = 3
+Window Z-Order = 4
 
 [File 0003]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.c"
 File Type = "CSource"
-Disk Date = 3727282631
+Disk Date = 3727349541
 In Projects = "1,"
-Source Window State = "1,1502,1502,1502,21,21,21,0,0,0,0,0,0,0,0,0,1489,0,1502,21,845,1540,1,0,"
-Window Top = 107
-Window Left = 91
+Source Window State = "1,1995,1995,1995,16,22,16,0,3,0,0,0,0,0,0,0,1996,0,1995,22,401,630,1,0,"
+Window Top = 33
+Window Left = 10
 Window Z-Order = 1
 
 [File 0004]
+Path = "/c/Program Files (x86)/National Instruments/Shared/CVI/Include/nidaqmx.h"
+File Type = "Include"
+Disk Date = 3709638606
+In Projects = ""
+Source Window State = "1,2700,2700,2700,18,32,18,0,3,0,0,0,0,0,0,0,2691,0,2700,32,371,630,1,0,"
+Window Top = 33
+Window Left = 10
+Window Z-Order = 6
+
+[File 0005]
+Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/userint.h"
+File Type = "Include"
+Disk Date = 3679674590
+In Projects = ""
+Source Window State = "1,295,295,295,8,20,8,0,3,0,0,0,0,0,0,0,281,0,295,20,401,630,1,0,"
+Window Top = 64
+Window Left = 26
+Window Z-Order = 5
+
+[File 0006]
+Path = "/c/Projects/LCRSystemTests/OPCDll/OPCDll/OPCDll.h"
+File Type = "Include"
+Disk Date = 3727349127
+In Projects = ""
+Source Window State = "1,59,59,59,18,34,18,0,3,0,0,0,0,0,0,0,48,0,59,34,400,600,1,0,"
+Window Top = 31
+Window Z-Order = 3
+
+[File 0007]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.c"
 File Type = "CSource"
 Disk Date = 3724667561
@@ -84,7 +113,7 @@ In Projects = "1,"
 Source Window State = "1,30,30,30,4,62,4,0,3,0,0,0,0,0,0,0,30,0,30,62,400,600,1,0,"
 Window Top = 31
 
-[File 0005]
+[File 0008]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.h"
 File Type = "Include"
 Disk Date = 3724667561
@@ -93,7 +122,13 @@ Source Window State = "1,28,28,28,6,28,6,0,3,0,0,0,0,0,0,0,8,0,28,28,371,637,1,0
 Window Top = 126
 Window Left = 58
 
-[File 0006]
+[File 0009]
+Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.mxb"
+File Type = "Unknown"
+Disk Date = 3724667561
+In Projects = "1,"
+
+[File 0010]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.c"
 File Type = "CSource"
 Disk Date = 3724667575
@@ -102,7 +137,7 @@ Source Window State = "1,30,30,30,4,63,4,0,3,0,0,0,0,0,0,0,10,0,30,63,281,637,1,
 Window Top = 64
 Window Left = 26
 
-[File 0007]
+[File 0011]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.h"
 File Type = "Include"
 Disk Date = 3724667575
@@ -111,43 +146,17 @@ Source Window State = "1,28,28,28,6,29,6,0,3,0,0,0,0,0,0,0,8,0,28,29,371,602,1,0
 Window Top = 33
 Window Left = 10
 
-[File 0008]
-Path = "/c/Program Files (x86)/National Instruments/Shared/CVI/Include/nidaqmx.h"
-File Type = "Include"
-Disk Date = 3709638606
-In Projects = ""
-Source Window State = "1,2700,2700,2700,18,32,18,0,3,0,0,0,0,0,0,0,2691,0,2700,32,371,630,1,0,"
-Window Top = 33
-Window Left = 10
-Window Z-Order = 5
-
-[File 0009]
-Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject.mxb"
-File Type = "Unknown"
-Disk Date = 3724667561
-In Projects = "1,"
-
-[File 0010]
+[File 0012]
 Path = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/DAQTaskInProject1.mxb"
 File Type = "Unknown"
 Disk Date = 3724667575
 In Projects = "1,"
 
-[File 0011]
+[File 0013]
 Path = "/c/Projects/LCRSystemTests/OPCDll/x64/Release/OPCDll.lib"
 File Type = "Library"
-Disk Date = 3719246832
+Disk Date = 3727349131
 In Projects = "1,"
-
-[File 0012]
-Path = "/c/Program Files (x86)/National Instruments/CVI2020/include/userint.h"
-File Type = "Include"
-Disk Date = 3679674590
-In Projects = ""
-Source Window State = "1,295,295,295,8,20,8,0,3,0,0,0,0,0,0,0,281,0,295,20,401,630,1,0,"
-Window Top = 64
-Window Left = 26
-Window Z-Order = 4
 
 [Tab Order]
 Tab 0001 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRFTP/LCRFTP.c"
@@ -155,6 +164,7 @@ Tab 0002 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.uir"
 Tab 0003 = "/c/Program Files (x86)/National Instruments/Shared/CVI/Include/nidaqmx.h"
 Tab 0004 = "/c/Projects/LCRSystemTests/LCR_Hardware_Tests/LCRTests.c"
 Tab 0005 = "/c/Program Files (x86)/National Instruments/CVI2020/include/userint.h"
+Tab 0006 = "/c/Projects/LCRSystemTests/OPCDll/OPCDll/OPCDll.h"
 
 [Default Build Config 0001 Debug]
 Generate Browse Info = True

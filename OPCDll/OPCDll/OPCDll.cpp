@@ -292,6 +292,12 @@ extern "C" {
             selection!=0);
 	}
   
+  int OPC_SetAbortLayer(int selection)
+  {
+    return OPC_SetBooleanValue("::AsGlobalPV:LCR_OpcData_ToLCR.AbortLayer",
+      selection != 0);
+  }
+
   const char* OPC_Status_Name(int status)
   {
     return UA_StatusCode_name(status);

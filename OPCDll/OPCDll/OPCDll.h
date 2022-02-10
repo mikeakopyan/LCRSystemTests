@@ -59,6 +59,10 @@ extern "C" {
 	// Close layer if selection = 0
 	DllImport int OPC_SetOpenLayer(int selection);
 
+	// Press Abort layer if selection = 1,
+	// Release Abort layer if selection = 0
+	DllImport int OPC_SetAbortLayer(int selection);
+
 	// Returns the human-readable name of the StatusCode
 	DllImport  const char* OPC_Status_Name(int status);
 
